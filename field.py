@@ -27,7 +27,7 @@ class LidarView (object):
         # sort the data by the angle so it is in scan order
         polar_data = sorted(polar_data, key=lambda x: x[1])
         # then group all of the points by degree measure
-        polar_data = itertools.groupby(polar_data, lambda x: round(x[1]))
+        polar_data = itertools.groupby(polar_data, lambda x: int(round(x[1])))
         # pick the closest one in each group because it shadows the others
         self.data = [min(interval, key=lambda x: x[0]) for _, interval in polar_data]
         self.origin = robot.position
@@ -36,7 +36,6 @@ class LidarView (object):
     def __getitem__ (self, index):
         return self.data[index]
     def plot (self):
-        pdb.set_trace()
         r, theta = zip(*self.data)
         theta = map(math.radians, theta)
         LidarView.ax.cla()
@@ -45,7 +44,7 @@ class LidarView (object):
     def write (self, fname):
         with open(fname, "a") as text_file:
             text_file.write("{:d}, {:d}\n".format(LidarView.begin_marker,
-                                                  self.data.len))
+                                                  len(self.data)))
             for r,theta in self.data:
                 text_file.write("{:f.1}, {:f.1}\n".format(theta, r))
 
@@ -114,10 +113,10 @@ class Field (object):
         while (x < -(Field.tower_width/2)):
             # left post for 2 inches of x projection
             if x <= -Field.tower_width+Field.post_projection:
-                self.field_data.extend([(x,y)])
+                self.field_data.append((x,y))
             # right post for 2 inches of x projection
             if x >= -(Field.tower_width/2)-Field.post_projection:
-                self.field_data.extend([(x,y)])
+                self.field_data.append((x,y))
             # next point along the -120 degree line
             x = x + left_facet_delta_x
             y = y + left_facet_delta_y
@@ -141,10 +140,10 @@ class Field (object):
         while (x > Field.tower_width/2):
             # left post for 2 inches of x projection
             if x >= Field.tower_width-Field.post_projection:
-                self.field_data.extend([(x,y)])
+                self.field_data.append((x,y))
             # right post for 2 inches of x projection
             if x <= Field.tower_width/2+Field.post_projection:
-                self.field_data.extend([(x,y)])
+                self.field_data.append((x,y))
             # next point along the -120 degree line
             x = x + left_facet_delta_x
             y = y + left_facet_delta_y
@@ -201,20 +200,18 @@ if __name__ == '__main__':
 
         # put robot at the origin
         r = Robot((0,0), 0)
-        #pdb.set_trace()
         f = Field()
         lv = None
         
         while True:
             
             text = raw_input("Enter command (mOVE,tURN,sHOW,iNFO,0(origin),hELP or qQUIT): ")
-
             cmd  = text.split(" ")[0]
 
             #If we see a quit command, well, quit
             if cmd == "q":
                 break
-
+            
             #Reset robot to the origin with 0 turn
             if cmd == "0":
                 r = Robot((0,0), 0)
@@ -229,6 +226,8 @@ if __name__ == '__main__':
                     cmd,cmd_arg = text.split(" ")
                     distance = int(cmd_arg)
                     r.move(distance)
+                    lv = f.createLidarView(r)
+                    lv.plot()
                 except ValueError:
                     print "Please specify distance in whole inches."
             elif cmd == "t":
@@ -236,6 +235,8 @@ if __name__ == '__main__':
                     cmd,cmd_arg = text.split(" ")
                     heading = int(cmd_arg)
                     r.turn(heading)
+                    lv = f.createLidarView(r)
+                    lv.plot()
                 except ValueError:
                     print "Please specify turn in whole degrees."
             elif cmd == "w":
