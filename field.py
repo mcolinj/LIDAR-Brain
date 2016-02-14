@@ -3,11 +3,13 @@ import pylab
 import matplotlib.pyplot as plt
 import itertools
 import math
+import pdb
 
 MM_PER_INCH = 25.4
 
 class LidarView (object):
-    begin_marker = 999
+    begin_marker = 888
+    end_marker = 999
     fig = pylab.figure(figsize=(9,9))
     ax = fig.add_subplot(111, projection='polar')
     ax.set_rmax(240)
@@ -34,20 +36,24 @@ class LidarView (object):
     def __getitem__ (self, index):
         return self.data[index]
     def plot (self):
+        pdb.set_trace()
         r, theta = zip(*self.data)
         theta = map(math.radians, theta)
         LidarView.ax.cla()
         LidarView.ax.plot(theta, r, 'x', color='r', linewidth=3)
-        pylab.plot(block=False)
+        pylab.show(block=False)
     def write (self, fname):
         with open(fname, "a") as text_file:
-            text_file.write("{:d}, ({:f},{:f}), {:d}\n".format(LidarView.begin_marker,
-                                                               self.origin[0],
-                                                               self.origin[1],
-                                                               int(round(self.orientation))))
+            text_file.write("{:d}, {:d}\n".format(LidarView.begin_marker,
+                                                  self.data.len))
             for r,theta in self.data:
-                text_file.write("{:d}, {:d}\n".format(theta, r))
-        
+                text_file.write("{:f.1}, {:f.1}\n".format(theta, r))
+
+            text_file.write("{:d}, {:f.1} ({:f.1},{:f.1})\n".format(LidarView.begin_marker,
+                                                                    self.orientation,
+                                                                    self.origin[0],
+                                                                    self.origin[1]))
+
 class Robot (object):
     def __init__ (self, origin, rotation):
         self.position = origin
@@ -67,28 +73,92 @@ class Field (object):
     """Fake field cartesian coordinates this is just a rectangle with a bump in the middle of an end"""
     # half width of field in inches
     field_width = 180
+    field_width_right = 60
+    slot_width = 12
+    slot_space = 12
+    #
     # working depth of the field (12 feet or so) in inches
     field_depth = 144
-    # tower width along the back wall (8 feet, but here a 1/2 width(
-    tower_width = 48
+    # tower width along the back wall (4 feet, but here a 1/2 width)
+    tower_width = 24
+    # tower depth of the tower face
+    tower_depth = math.sqrt(3)*12
     # 1/2 width of the tower face in inches
-    tower_face  = 18
+    tower_face  = 12
+    # 1/2 width of the post  (this is the x projection)
+    post_projection = 2
+    # how far back is the wall behind the holes in the back wall
+    back_back = 36
+    back_width = 180
     def __init__ (self):
+        """create the cartesian equivalent for the model of the back wall of the field"""
+        # left wall from corner to the left edge of the tower
         self.field_data = [(x, Field.field_depth)
-                           for x in range(-Field.field_width, -Field.tower_width)]
-        self.field_data.extend((x, Field.field_depth-Field.tower_width-x)
-                               for x in range(-Field.tower_width, -Field.tower_face))
-        self.field_data.extend((x, Field.field_depth-Field.tower_width+Field.tower_face)
+                           for x in xrange(-Field.field_width, -Field.tower_width)]
+
+        # set up an infinity back wall behind the tower
+        self.field_data.extend((x, Field.field_depth+Field.back_back)
+                               for x in range(-Field.back_width, Field.back_width))
+        #
+        # generate points for the left facet (with 16" opening)  This is 3 points on either
+        # side of the goal, running along a line that is 120 degrees (with a slope of -sqrt(3)
+        #
+        #
+        #  Generate the points that form the posts of the left facet goal
+        #  walk along the line and just put out the points that project on the
+        #  first and last 2 inches.
+        left_facet_delta_y = -math.sqrt(3)/2
+        left_facet_delta_x = 0.5
+        x = -Field.tower_width
+        y = Field.field_depth
+        while (x < -(Field.tower_width/2)):
+            # left post for 2 inches of x projection
+            if x <= -Field.tower_width+Field.post_projection:
+                self.field_data.extend([(x,y)])
+            # right post for 2 inches of x projection
+            if x >= -(Field.tower_width/2)-Field.post_projection:
+                self.field_data.extend([(x,y)])
+            # next point along the -120 degree line
+            x = x + left_facet_delta_x
+            y = y + left_facet_delta_y
+
+        # generate the points for the face of the tower
+        self.field_data.extend((x, Field.field_depth-Field.tower_depth)
                                for x in range(-Field.tower_face, Field.tower_face))
-        self.field_data.extend((x, Field.field_depth-Field.tower_width+x)
-                               for x in range(Field.tower_face, Field.tower_width))
+
+        #
+        # generate points for the left facet (with 16" opening)  This is 3 points on either
+        # side of the goal, running along a line that is 120 degrees (with a slope of -sqrt(3)
+        #
+        #
+        #  Generate the points that form the posts of the right facet goal
+        #  walk along the line and just put out the points that project on the
+        #  first and last 2 inches.
+        left_facet_delta_y = -math.sqrt(3)/2
+        left_facet_delta_x = -0.5
+        x = Field.tower_width
+        y = Field.field_depth
+        while (x > Field.tower_width/2):
+            # left post for 2 inches of x projection
+            if x >= Field.tower_width-Field.post_projection:
+                self.field_data.extend([(x,y)])
+            # right post for 2 inches of x projection
+            if x <= Field.tower_width/2+Field.post_projection:
+                self.field_data.extend([(x,y)])
+            # next point along the -120 degree line
+            x = x + left_facet_delta_x
+            y = y + left_facet_delta_y
+        
+        slot1_start = Field.tower_width+Field.field_width_right
+        slot1_end = slot1_start + 12
+        slot2_start = slot1_end + 12
+        slot2_end = slot2_start + 12
         self.field_data.extend((x, Field.field_depth)
-                               for x in range(Field.tower_width, Field.field_width))
-        #self.fig = pylab.figure(figsize=(9,9))
-        #self.axes = self.fig.add_subplot(111,aspect='equal')
-        #self.axes.set_autoscale_on(False)
-        #self.axes.set_xlim([-Field.field_width,Field.field_width])
-        #self.axes.set_ylim([-Field.field_width,Field.field_width])
+                               for x in range(Field.tower_width, slot1_start))
+        self.field_data.extend((x, Field.field_depth)
+                               for x in range(slot1_end, slot2_start))
+        self.field_data.extend((x, Field.field_depth)
+                               for x in range(slot2_end, slot2_end+12))
 
     def __getitem__ (self, index):
         return self.field_data[index]
@@ -116,19 +186,22 @@ class Field (object):
 
     def plot (self, robot):
         """show a picture of the field with the robot on it"""
+        self.fig = pylab.figure(figsize=(9,9))
+        self.axes = self.fig.add_subplot(111,aspect='equal')
+        self.axes.set_autoscale_on(False)
+        self.axes.set_xlim([-Field.field_width,Field.field_width])
+        self.axes.set_ylim([-Field.field_width,Field.field_width])
+
         x, y  = zip(*self.field_data)
 
-        pylab.cla()
-        self.axes.cla()
-        self.fig.clf()
-        
-        self.axes.plot(x, y)
+        self.axes.plot(x, y, 'x')
         pylab.show(block=False)
 
 if __name__ == '__main__':
 
         # put robot at the origin
         r = Robot((0,0), 0)
+        #pdb.set_trace()
         f = Field()
         lv = None
         

@@ -24,51 +24,6 @@ import collections
 import itertools
 import math
 
-MM_PER_INCH = 25.4
-
-class Field (object):
-        """Fake field cartesian coordinates this is just a rectangle with a bump in the middle of an end"""
-        # half width of field in inches
-        field_width = 180
-        # working depth of the field (12 feet or so) in inches
-        field_depth = 144
-        # tower width along the back wall (8 feet, but here a 1/2 width(
-        tower_width = 48
-        # 1/2 width of the tower face in inches
-        tower_face  = 18
-        def __init__ (self):
-                self.origin = (0, 0)
-                
-                self.field_data = [(x, Field.field_depth)
-                                   for x in range(-Field.field_width, -Field.tower_width)]
-                self.field_data.extend((x, Field.field_depth+Field.tower_width+x)
-                                       for x in range(-Field.tower_width, -Field.tower_face))
-                self.field_data.extend((x, Field.field_depth-Field.tower_width+Field.tower_face)
-                                       for x in range(-Field.tower_face, Field.tower_face))
-                self.field_data.extend((x, Field.field_depth-Field.tower_width+Field.tower_face+x)
-                                       for x in range(Field.tower_face, Field.tower_width))
-                self.field_data.extend((x, Field.field_depth)
-                                       for x in range(Field.tower_width, Field.field_width))
-        def __getitem__ (self, index):
-                return self.field_data[index]
-        """Convert cartesian coordinates to polar (inches to degrees and inches"""
-        #
-        def cart_to_polar(x, y):
-                return math.degrees(math.atan2(x, y)), math.sqrt(x*x+y*y)
-        """translate the data points for the robot origin"""
-        def translate(x, y, origin):
-                return x - origin[0], y - origin[1]
-        """rotate the data points in space by degrees to reflect robot orientation"""
-        def rotate(r, theta, rot):
-                return r, theta+rot
-        #
-        def createPolarField (self, origin, rotation):
-                new_origin = (translate(x, y, origin) for x, y in iter(self))
-                new_polar = (cart_to_polar(x, y) for x, y in new_origin])
-                return rotate(r, theta, rotation) for r, theta in new_polar
-
-
-
 class Reading (object):
         #
         # create the reading from two raw values
