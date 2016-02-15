@@ -3,7 +3,6 @@
 # Copyright 2012 Stephen Okay for Roadknight Labs
 # Released under the GNU GPL V2
 
-
 from __future__ import print_function
 """
 XV11 utils 
@@ -28,33 +27,41 @@ class Reading (object):
         #
         # create the reading from two raw values
         #
-        error_mask = 0x80
-        warning_mask = 0x40
+        error_mask = 0x8000
+        warning_mask = 0x4000
+        MM_PER_INCH = 25.4
         #
-       #
         #
-        def __init__ (self, raw_distance, raw_strength):
-                self._distance = raw_distance
-                self._strength = raw_strength
-                
+        #
+        def __init__ (self, heading, raw_distance, raw_strength):
+                self.heading = heading
+                self.raw_distance = raw_distance
+                self.strength = raw_strength
+
+        @property
         def error(self):
-                return self.error_mask & _distance
+                return self.error_mask & self.raw_distance
 
+        @property
         def warning(self):
-                return self.warning_mask & _distance
+                return self.warning_mask & self.raw_distance
 
+        @property
         def distance(self):
-                return ~(self.error_mask | self.warning_mask) & _distance
-
-        def strength(self):
-                return self._strength
+                return ~(self.error_mask | self.warning_mask) & self.raw_distance
 
         def distance_in_inches(self):
                 """Return the distance in inches.  999 if there is an error."""
-                if (self.warning || self.error):
-                        return 999
+                if (self.warning or self.error):
+                        return 777
                 else:
-                        return distance / MM_PER_INCH
+                        return self.distance / Reading.MM_PER_INCH
+        #
+        #  The formal representation of the reading contains the index (degrees)
+        #  and the distance in inches.
+        #
+        def __str__(self):
+                return "{:d},{:.2f}".format(self.heading, self.distance_in_inches())
 
 
 #
@@ -65,44 +72,88 @@ class Reading (object):
 #  The filter can also be used to remove data with
 #
 class Packet (object):
-        marker = 0xa0
+        packet_start = 0xfa
+        index_offset = 0xa0
         payload_length = 20
+        packet_length = 22
+        speed_units_per_rpm = 64
+
+        #  Packet format defined here, two bytes (marker + index, then a bunch of little endian shorts
         structure_def_str = '<BB H HH HH HH HH H'
-        tuple_def_str = 'Slice', 'start index speed dist0 strength0 dist1 strength1 dist2 strength2 dist3 strength3 checksum')
-        
+
+        #  Names of the unpacked bits
+        tuple_def_str = 'start index speed dist0 strength0 dist1 strength1 dist2 strength2 dist3 strength3 checksum'
+
+        #  we'll pack the readings in an array so we can iterate over them more easily
         readings = []
 
         # one time init for how to unpack data and tuplify it
         structure_def = struct.Struct(structure_def_str)
-        tuple_def = collections.namedtuple(tuple_def_str)                
+        tuple_def = collections.namedtuple('Packet_tuple', tuple_def_str)                
 
+        #
+        #  Construct useable internal
+        #
         def __init__(self, packed_data):
                 """Create a packet from the 22byte serial lidar data"""
+                #
+                #  Use the unpacking structure and the tuple def to get it into friendly form
+                #
                 unpacked_data = structure_def.unpack(packed_data)
                 packet_tuple = tuple_def._make(data)
 
-                self.index = packet_tuple.index
-
-                # initialize the readings for this Packet
+                #
+                #  Packet index represents a 4 degree range  (with high nibble offset)
+                #
+                self.index = Packet.decode_index(packet_tuple.index)
                 index_degrees = 4*index
-                self.readings = [ index_degrees+0, Reading(packet_tuple.dist0, packet_tuple.strength0),
-                                  index_degrees+1, Reading(packet_tuple.dist1, packet_tuple.strength1),
-                                  index_degrees+2, Reading(packet_tuple.dist2, packet_tuple.strength2),
-                                  index_degrees+3, Reading(packet_tuple.dist3, packet_tuple.strength3) ]
 
-                self.speed = packet_tuple.speed
+                #
+                # initialize the readings for this Packet
+                #
+                self.readings = [ Reading(index_degrees+0, packet_tuple.dist0, packet_tuple.strength0),
+                                  Reading(index_degrees+1, packet_tuple.dist1, packet_tuple.strength1),
+                                  Reading(index_degrees+2, packet_tuple.dist2, packet_tuple.strength2),
+                                  Reading(index_degrees+3, packet_tuple.dist3, packet_tuple.strength3) ]
+                #
+                # 
+                #
+                self.speed = Packet.decode_rpm(packet_tuple.speed)
 
-        def rpm(self):
+        @staticmethod
+        def decode_index(index_value):
+                return index_value - Packet.index_offset
+
+        #
+        #  Decode the rpd value 
+        #
+        @staticmethod
+        def decode_rpm(speed):
                 """Speed is reported in 64ths of an RPM"""
-                return self.speed / 64;
+                return int(round(speed / Packet.speed_units_per_rpm));
 
+        #
+        #
+        #
+        def __str__(self):
+                """Display friendly representation of a lidar packet"""
+                # 
+                print("{:d} {:d} {:.2f} {:.2f} {:.2f} {:.2f}".format(self.index,
+                                                                     self.speed,
+                                                                     self.readings[0].strength,
+                                                                     self.readings[1].strength,
+                                                                     self.readings[2].strength,
+                                                                     self.readings[3].strength))
+        #
+        # 
+        #
         def print_data(self):
                 """Slice index i is for degrees 4*i, 4*i+1, 4*i+2, and 4*i+3"""
                 for i in range(4):
-                        print("{:d} ")
+                        print("{!s}\n".format(self.readings[i]))
 
         #
-        # Checksum algorithm runs when we find the data marker
+        # Checksum algorithm applies to the packet
         #
         def checksum(self,data):
                 """Return True if the checksum is correct and False otherwise"""
@@ -128,6 +179,10 @@ class Packet (object):
         def __getitem__(self, ndx):
                 return self.readings[ndx]
 
+        @staticmethod
+        def unit_test():
+                print("OK")
+
 # packets = [ ... ]
 # flattened = itertools.chain(*packets)
 # backwards = reversed(flattened)
@@ -144,12 +199,12 @@ class Laser (object):
 	def __init__(self,sd):
 	#set up internal variables and just return a "stub" object
 	#we expect laserport to be a handle to an already open serial.Serial object
-
 		self.results=0
 		self.haslaser=0
 		self.laserport=sd
         
 	def ack(self):
+                """send carriage return and get the prompt from the lidar unit"""
 		ackbuf=0
 		self.laserport.flushInput()		
 		self.laserport.write("\r")
@@ -161,10 +216,11 @@ class Laser (object):
 			return -1
 
         #
-        #  do the scan line.
+        #  Get a lidar packet for a 4 degree slice of the circle
         #  <start> <index> <speed_L> <speed_H> [Data 0] [Data 1] [Data 2] [Data 3] <checksum_L> <checksum_H>
+        #  Slice index goes from 0 to 89.  Packet may encode it differently, though
         #
-	def packet_for_slice(self,slice):
+	def packet_for_slice(self,slice_index):
                 """read in a packet and return the constructed packet"""
 		headerpos=0
 		scanline=0
@@ -172,6 +228,12 @@ class Laser (object):
 		rpms=0	
 		scandist=[]
 		scanbytes=[]
+
+                #
+                # Index has 0xa in the hi nibble
+                #
+                packet_index = slice_index + 0xa0
+                
                 # basic packet format string.  Used to crack 22 byte stream
 
                 #   
@@ -185,24 +247,24 @@ class Laser (object):
                 slice = slice_tuple._make(unpacked_data)
 
                 # 22 bytes in the packet, let us read it all in there
-                scanba=bytearray(22)
+                scanba=bytearray(Packet.packet_length)
 
                 # 
 		while insync == 0:
-			nbytes=self.laserport.readinto(scanba[0:1]))
-			if nbytes == 1 and scanba[0] == Packet.marker:
-				nbytes=self.laserport.readinfo(scanba[1:2])
-				if nbytes == 1 and scanba[1] == slice:
+			nbytes=self.laserport.readinto(scanba[0:1])
+			if nbytes == 1 and scanba[0] == Packet.packet_start:
+				nbytes=self.laserport.readinto(scanba[1:2])
+				if nbytes == 1 and scanba[1] == packet_index:
 					insync=1
                 #
                 # We got a marker value and a matching slice value
                 # Read the remaining bytes and do the checksum calculation
                 #
 		if insync == 1:
-			try:
-                                # read the final 20 bytes
-                                nbytes=self.laserport.readinto(scanba[2:22])
-                                if nbytes == 20:
+		        try:
+                                # read the final Packet.payload_length bytes
+                                nbytes=self.laserport.readinto(scanba[2:2+Packet.payload_length])
+                                if nbytes == Packet.payload_length:
                                         # unpack the data conformant with the structure def
                                         slice_pkt = Packet(scanba)
 
@@ -266,7 +328,14 @@ class Laser (object):
 			distances.append(scanbuf[d]|(scanbuf[d+1]<<8))
 		return distances
 
-        
+def plot_rotation(packets):
+        readings = itertools.chain(*packets)
+        theta, radius = map(lambda r: (r.heading, r.strength), readings)
+        theta = map(math.radians, theta)
+        LidarView.ax.cla()
+        LidarView.ax.plot(theta, radius, 'x', color='r', linewidth=3)
+        pylab.show(block=False)
+
 if __name__ == '__main__':
 	
         # open up the serial port device connected to the lidar
@@ -279,6 +348,11 @@ if __name__ == '__main__':
         # connect the port with the laser and initialize the laser object
         l = laser(lp)
 
+        fig = pylab.figure(figsize=(9,9))
+        ax = fig.add_subplot(111, projection='polar')
+        ax.set_rmax(240)
+        ax.grid(True)
+        
         #
         #
         #
@@ -286,23 +360,16 @@ if __name__ == '__main__':
 	distdata=[]
 	slice_index=0
 	while 1: 
-		try: 
+		try:
 			packets[slice_index]=l.packet_for_slice(slice_index)
 
-                        items = []
-                        for si in xrange(1,srlen,2):
-				disterr=l.errbits(scanrange[si])
-				if disterr == 0:
-					distdata=scanrange[si-1],scanrange[si]
-                                        items.append("{:04}".format(l.bytes_distance(distdata)))
-                                else:
-                                        items.append('0000')
-
-                        print(', '.join(items))
-	                                
-			if scanhdr == 0xf9:
-				scanhdr=0xa0
-			else:
-				scanhdr+=1 
+                        #
+                        # next slice (and maybe some debugging output)
+                        #
+                        slice_index = (slice_index + 1) % Packet.slices_in_rotation
+                        print("{:r} ".format(packets[slice_index]))
+                        if slice_index == 0:
+                                #plot_rotation(packets)
+                                packets = []
 		except IOError,e:
 			print("failed to read scanline {:x}".format(scanhdr))

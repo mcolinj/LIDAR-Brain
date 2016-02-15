@@ -19,7 +19,6 @@ class LidarView (object):
     def round_values(r, theta):
         return int(round(r)), int(round(theta))
     
-    """create a polar field that can be easily drawn or converted to some lidar data"""
     def __init__ (self, polar_data, robot):
         """create lidar view from a set of rotated/translated polar points in the model world"""
         # round the data to whole degrees, and whole inches (4 bits of lidar noise)
