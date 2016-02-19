@@ -37,8 +37,11 @@ class LidarView (object):
     def plot (self):
         r, theta = zip(*self.data)
         theta = map(math.radians, theta)
+        robot_r = [ -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5 ]
+        robot_theta = [0]*11
         LidarView.ax.cla()
         LidarView.ax.plot(theta, r, 'x', color='r', linewidth=3)
+        LidarView.ax.plot(robot_theta, robot_r, 'x', color='b', linewidth=3)
         pylab.show(block=False)
     def write (self, fname):
         with open(fname, "a") as text_file:
@@ -60,7 +63,7 @@ class Robot (object):
     def turn(self, rotation):
         """turn the robot according to the specified amount (degrees)"""
         """left turn is negative and right turn is positive (that is graph backwards)"""
-        self.heading = self.heading + rotation
+        self.heading = self.heading - rotation
 
     def move(self, amount):
         """move the robot in the direction that it is pointing for the specified number of inches"""
@@ -95,8 +98,8 @@ class Field (object):
                            for x in xrange(-Field.field_width, -Field.tower_width)]
 
         # set up an infinity back wall behind the tower
-        self.field_data.extend((x, Field.field_depth+Field.back_back)
-                               for x in range(-Field.back_width, Field.back_width))
+        #self.field_data.extend((x, Field.field_depth+Field.back_back)
+        #                       for x in range(-Field.back_width, Field.back_width))
         #
         # generate points for the left facet (with 16" opening)  This is 3 points on either
         # side of the goal, running along a line that is 120 degrees (with a slope of -sqrt(3)
@@ -164,23 +167,18 @@ class Field (object):
     @staticmethod
     def cart_to_polar(x, y):
         """convert cartesian to polar data"""
-        return math.sqrt(x**2+y**2), math.degrees(math.atan2(y, x))
+        return math.sqrt(x**2+y**2), math.degrees(math.atan2(y, x))-90
 
     @staticmethod
     def translate(x, y, origin):
         """translate the data points for the robot origin"""
         return x - origin[0], y - origin[1]
     
-    @staticmethod
-    def rotate(r, theta, rot):
-        """rotate the data points in space by degrees to reflect robot orientation"""
-        return r, theta+rot
-
     def createLidarView (self, robot):
         """create a lidar view for a robot on the field"""
         new_origin = (Field.translate(x, y, robot.position) for x, y in iter(self))
         new_polar = (Field.cart_to_polar(x, y) for x, y in new_origin)
-        return LidarView([Field.rotate(r, theta, robot.heading) for r, theta in new_polar], robot)
+        return LidarView([(r, theta+robot.heading) for r, theta in new_polar], robot)
 
     def plot (self, robot):
         """show a picture of the field with the robot on it"""
