@@ -25,6 +25,7 @@ import itertools
 import math
 import pylab
 from time import sleep
+import socket
 
 class Reading (object):
         #
@@ -359,6 +360,24 @@ def export_rotation_to_file(rotation, file_name):
         # put rotation.str_data into file
         text_file.close()
 
+def handle_message(msg, rotation):
+        print("Handling message: {:s}".format(msg))
+        return "OK"
+
+
+class UDP_Socket:
+        def __init__(self, ip, port):
+                self.ip = ip
+                self.port = port
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                self.sock.bind(ip, port)
+
+        def sendto(self, message):
+                self.sock.sendto(message, (self.ip, self.port))
+
+        def recvfrom(self):
+                return self.sock.recvfrom()
+
 
 #
 #   Open up the serial port, get lidar data and write it to a file
@@ -366,6 +385,8 @@ def export_rotation_to_file(rotation, file_name):
 #
 if __name__ == '__main__':
 
+        sock = None
+        # sock = UDP_socket("127.0.0.1", 7007)
         lp = None
         
         # open up the serial port device connected to the lidar
@@ -394,7 +415,16 @@ if __name__ == '__main__':
                 #
                 # Here we could read the input work queue looking for requests
                 # And formulate answers to send to the requestor
-                # For now, we just output a lidar rotation every 10 seconds or so
+                if sock != None:
+                        data, addr = sock.recvfrom()
+                        print("MESSAGE:"+data)
+                        response  = handle_message(data, rotation)
+                        sock.sendto(response)
+
+                #
+                # For now, we just output a lidar data snapshot every 10 seconds or so
+                # We will want this for debugging (maybe every second instead)
+                # change the "seconds_per_output" to tune that.
                 #
                 elapsed_time = (SECONDS_PER_MINUTE/float(rotation[0].rpm))
                 rotation_time = rotation_time + elapsed_time
