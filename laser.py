@@ -209,17 +209,6 @@ class Laser (object):
 		self.haslaser=0
 		self.laserport=sd
         
-	def ack(self):
-                """send carriage return and get the prompt from the lidar unit"""
-		ackbuf=0
-		self.laserport.flushInput()		
-		self.laserport.write("\r")
-		ackbuf = self.laserport.read(3)
-		if (ackbuf == "#"):
-			self.laserport.flushInput()
-			return 0
-		else:
-			return -1
 
         #
         #  Get a lidar packet for a 4 degree slice of the circle
@@ -269,60 +258,6 @@ class Laser (object):
 		return slice_pkt
 
 
-        #
-        # expect to start reading at the beginning of a packet, 
-        # read a single byte, and if it has the headerbyte marker, followed
-        # by the specified curhdr byte, then set things to be insync and return True
-        # otherwise keep reading a single character at a time forever (if we never
-        # encounter the two bytes, then we just keep reading.
-        # Note:  the curhdr
-        #
-        def read_hdr(self,curhdr):
-		headerpos=0
-		scanline=0
-		insync=0
-		self.laserport.flushInput()
-                while insync == 0:
-			headerbyte=ord(self.laserport.read(1))
-                        #print "Expecting %x got %x" % (self.pinghdr[headerpos],headerbyte)
-                        if headerbyte == 0xfa :
-				scanbyte=ord(self.laserport.read(1))
-				if scanbyte == curhdr:
-				# print("FOUND START OF SCAN {:x} with curhdr of {:x} ".format(headerbyte,scanbyte))
-					insync=1
-		return True
-	
-	def errbits(self,errbyte):
-		result=0
-		if ((0x8000&(errbyte<<8))):
-			result=1
-		if ((0x4000&(errbyte<<8))):
-			result=3
-		return result
-
-	# print out the scanned line, including the sca
-	def dump_scanline(self,scanpos,scanbuf):
-		print("fa {:x}:".format(scanhdr),end=" ")
-		for sb in scanbuf:
-			disterr=l.errbits(sb)
-			if(disterr == 0):
-				print("{:x} ".format(sb),end=" ")
-			else:
-				if(disterr == 1):
-					print("<>",end=" ")
-				if(disterr == 3): 
-					print("><",end=" ")
-		print
-
-        #Expect that the user has already filtered out too-close/too far distance errors from the bytestream
-	def bytes_distance(self,scanbytes):
-		return scanbytes[0]|(scanbytes[1]<<8)
-
-	def scanline_distance(self,scanbuf):
-		distances=[]
-		for d in range((len(scanbuf))-1):
-                        distances.append(scanbuf[d]|(scanbuf[d+1]<<8))
-		return distances
 
 
 # could easily be a laser/lidar method, huh?
@@ -334,7 +269,7 @@ def gather_lidar_rotation(laser):
         for slice_index in range(Packet.slices_in_rotation):
                 try:
                         if lasr.laserport == None:
-                                # generate synthetic packet
+                                # drop in a synthetic packet when there is no lidar
                                 packet_str  = "fb{:02x}0040fe002200fc014400f803660077808800abcd".format(slice_index+Packet.index_offset)
                                 packet = Packet(binascii.unhexlify(packet_str))
                         else:
@@ -344,7 +279,7 @@ def gather_lidar_rotation(laser):
                         print("Unable to get packet for data slice with index {:d}.".format(slice_index))
 
         if lasr.laserport == None:
-                # sleep like it took the app
+                # sleep like it took some time to get the data if we are faking it
                 elapsed_time = 60.0 / float(packet.rpm) 
                 print("Sleeping for {:02f} seconds".format(elapsed_time))
                 sleep(elapsed_time)
@@ -370,13 +305,13 @@ class UDP_Socket:
                 self.ip = ip
                 self.port = port
                 self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                self.sock.bind(ip, port)
+                self.sock.bind((ip, port))
 
         def sendto(self, message):
                 self.sock.sendto(message, (self.ip, self.port))
 
         def recvfrom(self):
-                return self.sock.recvfrom()
+                return self.sock.recvfrom(1024)
 
 
 #
