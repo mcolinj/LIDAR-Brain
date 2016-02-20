@@ -26,6 +26,6 @@ def plot_file(fname):
     ax.plot(theta, radius, 'x', color='r', linewidth=3)
     pylab.show()
 
-    for arg in sys.argv[1:]:
-        plot_file(arg)
+for arg in sys.argv[1:]:
+    plot_file(arg)
     
