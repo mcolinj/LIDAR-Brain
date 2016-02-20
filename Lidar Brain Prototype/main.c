@@ -44,25 +44,25 @@ double r_slope (myRect *pair1, myRect *pair2, myRect *pair3, myRect *pair4) {
     return slope;
 }
 
-void findParallel () {
-    double dividends[slopeCount + 1];
-    double parallelLines[slopeCount + 1];
-    
-    for (int i = 0; i < slopeCount - 1; i++) {
-        dividends[i] = slopes[i] / slopes[i+1];
-    }
-    
-    for (int i = 0; i < sizeof(slopes)/sizeof(double); i++) {
-        int v = 0;
-        
-        if ( dividends[i] < 1.2 && dividends[i] > -1.2 && (dividends[i] > 0.0001 || dividends[i] < -0.0001) ) {
-            parallelLines[v] = dividends[i];
-            printf("The ratio is %f \n", parallelLines[v]);
-            
-            v++;
-        }
-    }
-}
+//void findParallel () {
+//    double dividends[slopeCount];
+//    double parallelLines[slopeCount];
+//    
+//    for (int i = 0; i < slopeCount - 1; i++) {
+//        dividends[i] = slopes[i] / slopes[i+1];
+//    }
+//    
+//    for (int i = 0; i < sizeof(slopes)/sizeof(double); i++) {
+//        int v = 0;
+//        
+//        if ( dividends[i] < 1.2 && dividends[i] > -1.2 && (dividends[i] > 0.0001 || dividends[i] < -0.0001) ) {
+//            parallelLines[v] = dividends[i];
+//            printf("The ratio is %f \n", parallelLines[v]);
+//            
+//            v++;
+//        }
+//    }
+//}
 
 double r_squared (myRect *pair1, myRect *pair2, myRect *pair3, myRect *pair4){
     //This calculates r-squared for 4 points
@@ -71,7 +71,6 @@ double r_squared (myRect *pair1, myRect *pair2, myRect *pair3, myRect *pair4){
     double numerator = 4*(pair1->x*pair1->y + pair2->x*pair2->y + pair3->x*pair3->y + pair4->x*pair4->y)
     - ( (pair1->x + pair2->x + pair3->x + pair4->x) * (pair1->y + pair2->y + pair3->y + pair4->y) );
     
-#warning don't allow denominator of zero
     double denominator1 = sqrt(  4*(pair1->x*pair1->x + pair2->x*pair2->x + pair3->x*pair3->x + pair4->x*pair4->x)
     - ( (pair1->x + pair2->x + pair3->x + pair4->x) * (pair1->x + pair2->x + pair3->x + pair4->x) )  );
     
@@ -113,6 +112,7 @@ double magnitudeChecker (int i,int d, myRect *array) {
         myRect largest = array[d+3];
         magnitude = sqrt( (largest.x - smallest.x)*(largest.x - smallest.x) + (largest.y - smallest.y)*(largest.y - smallest.y) );
         printf("The magnitude is %f ((%f,%f) = smallest, (%f, %f) = largest) \n", magnitude, smallest.x, smallest.y, largest.x, largest.y);
+        //r_slope(&array[i], &array[d+1], &array[d+2], &array[d+3]);
         return magnitude;
     } else {
         return magnitudeChecker(i, d+1, array);
@@ -121,22 +121,19 @@ double magnitudeChecker (int i,int d, myRect *array) {
 
 int main(int argc, const char * argv[]) {
     //Array of the data points
-    double data[360] = {30.7,590.6,590.6,590.6,19.1,590.6,19.1,590.6,590.6,590.6,29.8,590.6,29.0,590.6,28.8,590.6,29.3,590.6,30.6,590.6,57.0,
-        590.6,58.9,590.6,49.6,590.6,49.0,590.6,48.7,590.6,50.7,590.6,37.6,590.6,37.0,590.6,47.5,590.6,47.3,590.6,47.2,590.6,47.2,590.6,590.6,
-        590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,172.8,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,
-        590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,191.9,590.6,590.6,590.6,187.6,
-        590.6,215.7,590.6,590.6,590.6,590.6,590.6,590.6,590.6,211.2,590.6,220.7,590.6,220.0,590.6,590.6,590.6,590.6,590.6,590.6,590.6,
-        590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,
-        590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,48.3,590.6,
-        39.3,590.6,36.4,590.6,36.1,590.6,35.7,590.6,92.0,590.6,75.0,590.6,76.1,590.6,69.6,590.6,64.5,590.6,60.2,590.6,56.8,590.6,53.5,590.6,
-        50.7,590.6,48.3,590.6,46.1,590.6,44.1,590.6,42.3,590.6,35.5,590.6,35.8,590.6,36.2,590.6,36.9,590.6,35.8,590.6,34.8,590.6,34.1,590.6,
-        33.2,590.6,32.5,590.6,31.9,590.6,31.2,590.6,30.7,590.6,30.3,590.6,29.8,590.6,29.5,590.6,29.1,590.6,28.8,590.6,28.5,590.6,28.3,590.6,
-        28.2,590.6,28.1,590.6,28.0,590.6,27.9,590.6,27.9,590.6,27.9,590.6,27.9,590.6,28.0,590.6,28.1,590.6,28.2,590.6,28.5,590.6,28.7,590.6,
-        28.9,590.6,29.3,590.6,29.6,590.6,30.0,590.6,30.5,590.6,30.9,590.6,31.5,590.6,32.2,590.6,32.8,590.6,33.6,590.6,34.5,590.6,35.4,590.6,
-        36.5,590.6,37.6,590.6,38.9,590.6,40.4,590.6,41.9,590.6,43.6,590.6,45.7,590.6,48.0,590.6,50.3,590.6,53.5,590.6,57.1,590.6,61.2,590.6,
-        65.2,590.6,66.1,590.6,63.7,590.6,61.2,590.6,59.3,590.6,57.6,590.6,56.2,590.6,54.6,590.6,53.6,590.6,52.4,590.6,51.9,590.6,50.7,590.6,
-        50.2,590.6,49.4,590.6,49.1,590.6,48.3,590.6,48.0,590.6,47.6,590.6,47.2,590.6,46.7,590.6,46.5,590.6,46.3,590.6,46.2,590.6,46.1,590.6,
-        46.1,590.6,46.2,590.6,46.3,590.6,46.8,590.6,47.0,590.6,590.6,590.6,31.5,590.6};
+    double data[360] = {590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,22.1,590.6,
+        21.1,590.6,19.6,590.6,18.9,590.6,18.7,590.6,18.9,590.6,28.4,590.6,28.4,590.6,85.1,590.6,83.7,590.6,218.9,590.6,187.8,590.6,187.5,590.6,590.6,590.6,590.6,590.6,590.6,590.6,
+        590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6
+        ,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,214.3,590.6,130.4,590.6,590.6,590.6,590.6,590.6,215.9,590.6,222.7,590.6,223.9,590.6,590.6,590.6,590.6,
+        590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,
+        590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,40.6,590.6,41.7,590.6,42.9,590.6,71.1,590.6,60.4,590.6,53.9,590.6,49.6,590.6,49.3,590.6,49.0,590.6,89.8,
+        590.6,83.7,590.6,78.0,590.6,73.4,590.6,69.1,590.6,65.4,590.6,62.2,590.6,59.3,590.6,56.9,590.6,49.5,590.6,49.9,590.6,50.7,590.6,49.1,590.6,47.6,590.6,46.3,590.6,45.0,590.6,
+        43.9,590.6,42.9,590.6,42.0,590.6,41.2,590.6,40.4,590.6,39.7,590.6,39.2,590.6,38.7,590.6,38.1,590.6,37.7,590.6,37.4,590.6,37.0,590.6,36.8,590.6,36.6,590.6,36.5,590.6,36.3,
+        590.6,36.2,590.6,36.2,590.6,36.2,590.6,36.3,590.6,36.4,590.6,36.5,590.6,36.7,590.6,37.0,590.6,37.3,590.6,37.7,590.6,38.3,590.6,38.9,590.6,590.6,590.6,590.6,590.6,590.6,590.6
+        ,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,
+        590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6
+        ,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,
+        590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6,590.6};
     
 
      //int goodDataSize = removeJunk(data, sizeof(data), withoutJunk);
@@ -174,6 +171,13 @@ int main(int argc, const char * argv[]) {
 //    int goodPoints = 16;
 //    //End test
     
+    double magnitudes[360];
+    int magnitudeCount = 0;
+    
+    myRect greatestMagnitudePoints[4];
+    double greatestMagnitude = magnitudes[0];
+    
+    myRect frontFaceOfTowerPoints[4];
     
     for (int i = 0; i < goodPoints - 3; i++) {
         //Run through the array to find sets of 4 colinear points (and filtering out data garbage)
@@ -182,14 +186,47 @@ int main(int argc, const char * argv[]) {
         
         if( (rs = r_squared(&OrderedPairs[i], &OrderedPairs[i+1], &OrderedPairs[i+2], &OrderedPairs[i+3]) > r2_min)) {
             printf("%f \n", rs);
-            magnitudeChecker(i, i, OrderedPairs);
-            
+            magnitudes[magnitudeCount] = magnitudeChecker(i, i, OrderedPairs);
+            magnitudeCount++;
+            if (magnitudes[magnitudeCount] > greatestMagnitude) {
+                
+                greatestMagnitude = magnitudes[magnitudeCount];
+                
+                greatestMagnitudePoints[0] = OrderedPairs[i];
+                greatestMagnitudePoints[1] = OrderedPairs[i+1];
+                greatestMagnitudePoints[2] = OrderedPairs[i+2];
+                greatestMagnitudePoints[3] = OrderedPairs[i+3];
+                
+                printf("Wall found with points (%f, %f), (%f, %f), (%f, %f), (%f, %f)", greatestMagnitudePoints[0].x, greatestMagnitudePoints[0].y, greatestMagnitudePoints[1].x,greatestMagnitudePoints[1].y, greatestMagnitudePoints[2].x, greatestMagnitudePoints[2].y, greatestMagnitudePoints[3].x, greatestMagnitudePoints[3].y);
+            }
+            //To be used if the robot is in a position that the front face of the tower can be found (we won't be using it, as our robot will go under the low bar
+//            } else if (magnitudes[magnitudeCount] > 20  &&  magnitudes[magnitudeCount] < 28) {
+//                frontFaceOfTowerPoints[0] = OrderedPairs[i];
+//                frontFaceOfTowerPoints[1] = OrderedPairs[i+1];
+//                frontFaceOfTowerPoints[2] = OrderedPairs[i+2];
+//                frontFaceOfTowerPoints[3] = OrderedPairs[i+3];
+//                
+//                printf("Front face found");
+//            }
+                
         } else {
             printf("Not found %f = r_squared([%f,%f]) \n", rs, OrderedPairs[i].x, OrderedPairs[i].y);
         }
         
     }
-    findParallel();
+    //findParallel();
+    
+    double closestPoint = (greatestMagnitudePoints[0].x)*(greatestMagnitudePoints[0].x) + (greatestMagnitudePoints[0].y)*(greatestMagnitudePoints[0].y);
+    for (int i = 0; i < 4; i++) {
+        if (((greatestMagnitudePoints[i].x)*(greatestMagnitudePoints[i].x) + (greatestMagnitudePoints[i].y)*(greatestMagnitudePoints[i].y)) < closestPoint) {
+            closestPoint = (greatestMagnitudePoints[i].x)*(greatestMagnitudePoints[i].x) + (greatestMagnitudePoints[i].y)*(greatestMagnitudePoints[i].y);
+        }
+    }
+
+    //Find the magnitude approximatly equal to 2 feet, as this is the face of the tower parallel to the wall
+    
+    
+    
     
 //In case testing of regression formula is required (is commented because not currently needed):
 
