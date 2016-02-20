@@ -14,7 +14,6 @@ from multiprocessing import Process
 import sys
 import os 
 import serial 
-import socket
 import pdb
 import numpy as np
 import matplotlib.pyplot as plt
@@ -51,22 +50,26 @@ class Reading (object):
                 return self.warning_mask & self.raw_distance
 
         @property
-        def distance(self):
+        def discard(self):
+                return self.error or self.warning
+
+        @property
+        def range(self):
                 return ~(self.error_mask | self.warning_mask) & self.raw_distance
 
         @property
-        def distance_in_inches(self):
+        def range_in_inches(self):
                 """Return the distance in inches.  999 if there is an error."""
                 if (self.warning or self.error):
                         return 777
                 else:
-                        return self.distance / Reading.MM_PER_INCH
+                        return self.range / Reading.MM_PER_INCH
         #
         #  The formal representation of the reading contains the index (degrees)
-        #  and the distance in inches.
+        #  and the range in inches.
         #
         def __str__(self):
-                return "{:d},{:.2f}".format(self.heading, self.distance_in_inches)
+                return "{:d},{:.2f}".format(self.heading, self.range_in_inches)
 
 
 #
@@ -152,10 +155,10 @@ class Packet (object):
                 """Display friendly representation of a lidar packet"""
                 return "{:d} {:d} {:.2f} {:.2f} {:.2f} {:.2f}".format(self.index,
                                                                       self.rpm,
-                                                                      self.readings[0].distance_in_inches,
-                                                                      self.readings[1].distance_in_inches,
-                                                                      self.readings[2].distance_in_inches,
-                                                                      self.readings[3].distance_in_inches)
+                                                                      self.readings[0].range_in_inches,
+                                                                      self.readings[1].range_in_inches,
+                                                                      self.readings[2].range_in_inches,
+                                                                      self.readings[3].range_in_inches)
         #
         # 
         #
@@ -164,7 +167,7 @@ class Packet (object):
                 str_data = "" 
                 for i in range(4):
                         str_data = str_data + "{!s}\n".format(self.readings[i])
-                return str_data
+                return str_data                
 
         #
         # Checksum algorithm applies to the packet
@@ -258,89 +261,142 @@ class Laser (object):
 		return slice_pkt
 
 
+        #
+        # Collect a complete set of packets and concatenate them into
+        #
+        def gather_full_rotation(self):
+                """Read a rotation of lidar data and return it as a collection of packets"""
+                rotation = []
+                slice_index = 0
+
+                #
+                #  Loop over all of the slices 
+                #
+                for slice_index in range(Packet.slices_in_rotation):
+                        try:
+                                if self.laserport == None:
+                                        # drop in a synthetic packet when there is no lidar
+                                        packet_str  = "fb{:02x}0040fe002200fc014400f803660077808800abcd".format(slice_index+Packet.index_offset)
+                                        packet = Packet(binascii.unhexlify(packet_str))
+                                else:
+	                                packet = self.packet_for_slice(slice_index)
+                                rotation.append(packet)
+                        except Exception as e:
+                                print("Unable to get packet for data slice with index {:d}.".format(slice_index))
+
+                #
+                # If generating synthetic data, slow down for a bit
+                # Sleep is related to the rotation speed in the synthetic packet.
+                #
+                if self.laserport == None:
+                        # sleep like it took some time to get the data if we are faking it
+                        elapsed_time = 60.0 / float(packet.rpm) 
+                        print("Sleeping for {:02f} seconds".format(elapsed_time))
+                        sleep(elapsed_time)
+
+                # return either the real or the synthetic rotation
+                return rotation
 
 
-# could easily be a laser/lidar method, huh?
-def gather_lidar_rotation(laser):
-        """Read a rotation of lidar data and return it"""
-        rotation = []
-        slice_index = 0
+#
+#  A single rotation of lidar data
+#
+class Rotation:
+        """
+        Rotation stores the lidar packets for a single rotation.
+        Rotation provides reduced, transformed, and/or sanitized
+        data to the client wanting to use the data.
+
+        The coordinate system used for the rotation is -90 to 90 degrees.
+
+        Left to the programmer to generalize the implementation to support
+        the generalization of the supported range.
+
+        Note:  The lidar has a predermined order for gathering the data,
+        so, some changes there would be necessary in order to ensure that
+        the data reported in the left-to-right sweep was gathered in
+        the same order.    This permits motion correction to be linearly
+        applied to the data (linear interpolation applied to the full
+        scan based upon the change in the range reported by the same
+        heading range from scan-to-scan.
+        """
+        left_to_right = (-90, 91)
+        full_rotation_packets = 90
         
-        for slice_index in range(Packet.slices_in_rotation):
-                try:
-                        if lasr.laserport == None:
-                                # drop in a synthetic packet when there is no lidar
-                                packet_str  = "fb{:02x}0040fe002200fc014400f803660077808800abcd".format(slice_index+Packet.index_offset)
-                                packet = Packet(binascii.unhexlify(packet_str))
-                        else:
-	                        packet = laser.packet_for_slice(slice_index)
-                        rotation.append(packet)
-                except:
-                        print("Unable to get packet for data slice with index {:d}.".format(slice_index))
+        def __init__(self, rotation_packets):
+                """Create a single rotation view of the world"""
+                self.packets = rotation_packets
 
-        if lasr.laserport == None:
-                # sleep like it took some time to get the data if we are faking it
-                elapsed_time = 60.0 / float(packet.rpm) 
-                print("Sleeping for {:02f} seconds".format(elapsed_time))
-                sleep(elapsed_time)
+                if len(self.packets) != Rotation.full_rotation_packets:
+                        print("Not playing with a full rotation of data, dude!")
 
-        # return either the real or the synthetic rotation
-        return rotation
+                #
+                # rotation might not have been built from 0 to 359, so
+                # sort the data by the heading value.  Note that we could
+                # be more efficient by packing the data in the order that we
+                # want, but this is more robust.
+                #
+                # store as clean polar data in the -90 to 90 range
+                #
+                self.all_readings = sorted(list(itertools.chain(*self.packets)),
+                                           key = lambda x: x.heading)
+                
+                view_readings = [self.all_readings[i]
+                                 for i in range(*Rotation.left_to_right)
+                                 if not self.all_readings[i].discard]
 
-def export_rotation_to_file(rotation, file_name):
-        """open file_name file and write the rotation data to it"""
-        text_file = open(file_name, "w")
-        for p in rotation:
-                text_file.write(p.as_data())
-        # put rotation.str_data into file
-        text_file.close()
+                #
+                #  For ease of manipulation, the view data is just stored as
+                #  a list of tuples (heading, range (in inches))
+                #
+                self.view_data  = [(r.heading, r.range_in_inches) for r in view_readings]
 
+        @staticmethod
+        def polar_to_cart(theta, r):
+                """convert cartesian to polar data"""
+                theta_r = math.radians(theta)
+                return r*math.cos(theta_r), r*math.sin(theta_r)
+
+        def polar_data(self):
+                return self.view_data
+        
+        def cartesian_data(self):
+                """Return an array of clean cartesian data points (left to right)"""
+                return [Rotation.polar_to_cart(theta, r) for theta, r in self.view_data]
+        
+        def export_to_file(self, file_name):
+                """open the file file_name and write the rotation data to it"""
+                text_file = open(file_name, "w")
+                for p in self.packets:
+                        text_file.write(p.as_data())
+                text_file.close()
+
+        def rpm(self):
+                """report an rpm value collected in this rotation"""
+                return self.packets[0].rpm
+
+        #
+        #  Not sure what ought to be iterable about this,
+        #  but, for now, it can be the sanitized polar data.
+        #
+        def __getitem__(self, ndx):
+                return self.view_data[ndx]
+
+        def range_at_heading(self, sweep):
+                """put out the heading represented by heading sweep"""
+
+                min_reading = (0, 0)
+                sweep_data = [x for x in self.view_data if x[0] in range(*sweep)]
+
+                if sweep_data:
+                        min_reading = min(sweep_data, key=lambda r:r[1])
+
+                return min_reading
+                
+        
 def handle_message(msg, rotation):
         print("Handling message: {:s}".format(msg))
         return "OK"
-
-#
-#  Create the infra for two-way communication channel using UDP
-#  Set receive from timeout to .001 seconds to avoid blocking for
-#  long.
-#
-class UDPCommunicationChannel:
-        # Useful defaults permit minimal arguments for simple test.
-        # On one end:
-        #      sender = UDPCommunicationChannel()
-        #    receiver = UDPCommunicationChannel(local_port=sender.remote_port, remote_port=sender.local_port)
-        def __init__(self, local_ip="127.0.0.1", local_port=52777,
-                     remote_ip="127.0.0.1", remote_port=52888,
-                     timeout_in_seconds=0.001, receive_buffer_size=1024):
-                """Create the sending and receiving sockets for a communcation channel"""
-                self.local_ip = local_ip
-                self.local_port = local_port
-                self.remote_ip = remote_ip
-                self.remote_port = remote_port
-
-                # create the receive socket
-                self.receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                self.receive_socket.bind((local_ip, local_port))
-
-                # and the sending socket
-                self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-                # cache other configurable parameters
-                self.timeout_in_seconds = timeout_in_seconds
-                self.receive_buffer_size = receive_buffer_size
-
-        def send_to(self, message):
-                self.send_socket.sendto(message, (self.remote_ip, self.remote_port))
-        def reply_to(self, message, (ip, port)):
-                self.send_socket.sendto(message, (ip, port))
-
-        def receive_reply(self):
-                self.send_socket.settimeout(self.timeout_in_seconds)
-                return self.send_socket.recvfrom(self.receive_buffer_size)
-
-        def receive_from(self):
-                self.receive_socket.settimeout(self.timeout_in_seconds)
-                return self.receive_socket.recvfrom(self.receive_buffer_size)
 
 
 #
@@ -372,7 +428,7 @@ if __name__ == '__main__':
         SECONDS_PER_MINUTE = 60.0
 	while 1: 
 		try:
-                        rotation = gather_lidar_rotation(lasr)
+                        rotation = Rotation(lasr.gather_full_rotation())
  		except IOError,e:
 			print("failed to gather lidar rotation")
 
@@ -390,13 +446,16 @@ if __name__ == '__main__':
                 # We will want this for debugging (maybe every second instead)
                 # change the "seconds_per_output" to tune that.
                 #
-                elapsed_time = (SECONDS_PER_MINUTE/float(rotation[0].rpm))
+                range_at_heading = rotation.range_at_heading((-10, 10))
+                print("Range at heading (-10,10) is {:.2f} inches at {:2d} degrees)".format(range_at_heading[1],range_at_heading[0]))
+
+                elapsed_time = (SECONDS_PER_MINUTE/float(rotation.rpm()))
                 rotation_time = rotation_time + elapsed_time
                 current_time = current_time + elapsed_time
                 if rotation_time > seconds_per_output:
                         # write out about every 10 seconds to output
                         file_name = "lidar{:04d}.dat".format(file_index)
                         print("Time: {:.2f} Exporting current rotation of data to {:s}".format(current_time, file_name))
-                        export_rotation_to_file(rotation, file_name)
+                        rotation.export_to_file(file_name)
                         file_index = file_index + 1
                         rotation_time = 0
