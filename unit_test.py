@@ -2,6 +2,10 @@ from laser import *
 import binascii
 import pdb
 from udp_channels import UDPChannel
+from field import *
+from laser import *
+from analyzer import *
+import math
 
 def test_reading():
     """unit test of the reading object to make sure it continues to work"""
@@ -51,6 +55,62 @@ def test_udp_channel():
 
     try:
         data, addr = local.receive_from()
+        assert False, "Should have timed out, but did not."
     except:
         print("local.receive_from() timed out")
 
+def test_analzyer_on_field_model():
+    """
+    Create a model of the field, then ask the laser to compute
+    the range for sweep.  Then move the robot and ask again.
+    """
+    robot = Robot()
+    field = FieldModel()
+    tower_range = field.tower_range_from_origin()
+    rotation = FakeRotation(field, robot)
+    heading, sweep_range = Analyzer.range_at_heading(rotation.polar_data(), (-10,11))
+
+    #  closest point should be dead ahead
+    assert heading == 0
+    assert sweep_range == tower_range
+
+    movement = 100
+    robot.move(movement)
+    rotation = FakeRotation(field, robot)
+    heading, sweep_range = Analyzer.range_at_heading(rotation.polar_data(), (-10,11))
+
+    #  closest point should be dead ahead
+    assert heading == 0
+    assert sweep_range == (tower_range - movement)
+
+
+def test_sensor_messages():
+    sm1 = SensorMessage(sender='foobar', message='hi')
+    sm2 = SensorMessage(sender='tester', message='howdy')
+
+    as_string = sm1.encode_message()
+    sm2 = SensorMessage.create_from_message(as_string)
+
+    assert sm1.__dict__ == sm2.__dict__
+
+    lrah1 = LidarRangeAtHeadingMessage()
+    lrah2 = LidarRangeAtHeadingMessage()
+    assert lrah2.__dict__ == lrah1.__dict__
+
+    lrah2.range = 42
+    lrah1.range = 41
+    assert lrah2.__dict__ != lrah1.__dict__
+
+    lrah1.range = 42
+    assert lrah2.__dict__ == lrah1.__dict__
+
+    lrah1.heading = 45
+    lrah2.heading = 90
+    assert lrah2.__dict__ != lrah1.__dict__
+
+    lrah1.heading = 90
+    assert lrah2.__dict__ == lrah1.__dict__
+    assert lrah1.encode_message() == lrah2.encode_message()
+    
+
+    

@@ -1,115 +1,45 @@
-#!/usr/bin/env python 
-#laser.py 
-# Copyright 2012 Stephen Okay for Roadknight Labs
-# Released under the GNU GPL V2
-
-from __future__ import print_function
-"""
-XV11 utils 
-This program provides methods to get ranging data from a bare(i.e. not in a) Neato Robotics XV11 Laser Distance Scanner
-running 2.6.x firmware
-"""
-
-import sys
-import os 
-import serial 
-import pdb
+import serial
 import struct
 import binascii
 import collections
 import itertools
-import math
 from time import sleep
-import socket
-from udp_channels import *
-from sensor_message import *
-from field import *
-from  analyzer import *
-from lidar_viewer import LidarLogger, LidarViewer
+import pdb
+from laser import Reading as Reading
 
-import logging
-
-class Reading (object):
-        """
-        A reading is a unit of lidar data.  It contains both range and heading
-        information.     There is also some error and warning information.
-        """
-        #
-        # create the reading from two raw values
-        #
-        error_mask = 0x8000
-        warning_mask = 0x4000
-        MM_PER_INCH = 25.4
-        #
-        #
-        #
-        def __init__ (self, heading, raw_distance, raw_strength):
-                self.heading = heading
-                self.raw_distance = raw_distance
-                self.strength = raw_strength
-
-        @property
-        def error(self):
-                return self.error_mask & self.raw_distance
-
-        @property
-        def warning(self):
-                return self.warning_mask & self.raw_distance
-
-        @property
-        def discard(self):
-                return self.error or self.warning
-
-        @property
-        def range(self):
-                return ~(self.error_mask | self.warning_mask) & self.raw_distance
-
-        @property
-        def range_in_inches(self):
-                """Return the distance in inches.  999 if there is an error."""
-                if (self.warning or self.error):
-                        return 777
-                else:
-                        return self.range / Reading.MM_PER_INCH
-        #
-        #  The formal representation of the reading contains the index (degrees)
-        #  and the range in inches.
-        #
-        def __str__(self):
-                return "{:d},{:.2f}".format(self.heading, self.range_in_inches)
-
-
+#The periodicity of the data is 1446 bytes.
 #
-#  Packet class is the one-stop shop for information about the packet
-#  It knows how to read the packet off the wire and how to parse/decode
-#  the contents.
-#  A filter can be run over an array of Packets in order to produce a flattened data set
-#  The filter can also be used to remove data with
-# basic packet format string.  Used to crack 22 byte stream
-#   
-#  <start> <index> <speed_L> <speed_H> [Data 0] [Data 1] [Data 2] [Data 3] <checksum_L> <checksum_H>
-#  `byte 0 : <distance 7:0>`
-#  `byte 1 : <"invalid data" flag> <"strength warning" flag> <distance 13:8>`
-#  `byte 2 : <signal strength 7:0>`
-#  `byte 3 : <signal strength 15:8>`
+#It is organized as follow :
 #
-class Packet (object):
-        """
-        Packet is the parseable unit read from the lidar.   For 2.4 and 2.7,
-        this is 22 bytes containing 4 readings for 4 degrees.
-        """
-        packet_start = 0xfa
+#`5A A5 00 C0 XX XX <data>`
+#
+#where `XX XX` is an information about the current rotation speed of the
+#module, in clock ticks (little endian).
+#http://forums.trossenrobotics.com/showthread.php?t=4470&page=5
+#posted interesting data about this.
+#
+#`<data>` is composed of 360 group of 4 bytes, organized like this :
+#`byte 0 : <distance 7:0>`
+#`byte 1 : <"invalid data" flag> <"quality warning" flag> <distance 13:8>`
+#`byte 2 : <quality 7:0>`
+#`byte 3 : <quality 15:8>`
+#
+class OldPacket (object):
+        packet_start0 = 0x5a
+        packet_start1 = 0xa5
+        packet_start2 = 0x0
+        packet_start3 = 0x0
         index_offset = 0xa0
-        payload_length = 20
-        packet_length = 22
+        payload_length = 1440
+        packet_length = 1446
         speed_units_per_rpm = 64
-        slices_in_rotation = 90
+        slices_in_rotation = 1
 
         #  Packet format defined here, two bytes (marker + index, then a bunch of little endian shorts
-        structure_def_str = '<BB H HH HH HH HH H'
+        structure_def_str = '<BBBB H HH HH HH HH HH HH'
 
         #  Names of the unpacked bits
-        tuple_def_str = 'start index speed dist0 strength0 dist1 strength1 dist2 strength2 dist3 strength3 checksum'
+        tuple_def_str = 'start5a starta5 startc0 start0 speed dist0 strength0 dist1 strength1 dist2 strength2 dist3 strength3 dist4 strength4 dist5 strength5'
 
         #  we'll pack the readings in an array so we can iterate over them more easily
         readings = []
@@ -121,34 +51,37 @@ class Packet (object):
         #  Construct useable internal
         #
         def __init__(self, packed_data):
-                """Create a packet from the 22byte serial lidar data"""
+                """Create a packet from the many byte serial lidar data"""
                 #
                 #  Use the unpacking structure and the tuple def to get it into friendly form
                 #
-                unpacked_data = Packet.structure_def.unpack(packed_data)
-                packet_tuple = Packet.tuple_def._make(unpacked_data)
+                unpacked_data = OldPacket.structure_def.unpack(packed_data)
+                packet_tuple = OldPacket.tuple_def._make(unpacked_data)
 
                 #
                 #  Packet index represents a 4 degree range  (with high nibble offset)
-                #
-                self.index = Packet.decode_index(packet_tuple.index)
-                index_degrees = 4*self.index
+                self.index = 0
+                index_degrees = 0
 
+                
+                #
                 #
                 # initialize the readings for this Packet
                 #
                 self.readings = [ Reading(index_degrees+0, packet_tuple.dist0, packet_tuple.strength0),
                                   Reading(index_degrees+1, packet_tuple.dist1, packet_tuple.strength1),
                                   Reading(index_degrees+2, packet_tuple.dist2, packet_tuple.strength2),
-                                  Reading(index_degrees+3, packet_tuple.dist3, packet_tuple.strength3) ]
+                                  Reading(index_degrees+3, packet_tuple.dist3, packet_tuple.strength3),
+                                  Reading(index_degrees+4, packet_tuple.dist4, packet_tuple.strength4),
+                                  Reading(index_degrees+5, packet_tuple.dist5, packet_tuple.strength5) ]
+
+                for i in range(6,360):
+                    self.readings.append(Reading(i, 0x8000, 10))
+                    
                 #
                 # 
                 #
                 self.speed = packet_tuple.speed
-
-        @staticmethod
-        def decode_index(index_value):
-                return index_value - Packet.index_offset
 
         #
         #  Decode the rpm value 
@@ -156,7 +89,7 @@ class Packet (object):
         @property
         def rpm(self):
                 """Speed is reported in 64ths of an RPM"""
-                return int(round(self.speed / Packet.speed_units_per_rpm));
+                return int(round(self.speed / OldPacket.speed_units_per_rpm));
 
         #
         #
@@ -207,8 +140,8 @@ class Packet (object):
         def __getitem__(self, ndx):
                 return self.readings[ndx]
 
-class Laser (object):
-	
+class OldLaser (object):
+	"""Read packets from the old lidar packet format.  Quick hack."""
 	haslaser = 0
 	laserport = 0
 	laserlock_fd = ''
@@ -233,26 +166,26 @@ class Laser (object):
 		headerpos=0
 		scanline=0
 		insync=0
-		rpms=0	
+		rpms=0
 		scandist=[]
 		scanbytes=[]
-
-                #
-                # Index has 0xa in the hi nibble
-                #
-                packet_index = slice_index + Packet.index_offset
                 
-                # 22 bytes in the packet, let us read it all in there
-                scanba=bytearray(Packet.packet_length)
+                # bytes in the packet, let us read it all in there
+                scanba=bytearray(OldPacket.packet_length)
 
                 #
                 # print("Looking for packet with index {:d}\n".format(slice_index))
 		while insync == 0:
                         scanba[0] = ord(self.laserport.read(1))
-			if scanba[0] == Packet.packet_start:
+			if scanba[0] == OldPacket.packet_start0:
                                 scanba[1] = ord(self.laserport.read(1))
-				if scanba[1] == packet_index:
-					insync=1
+				if scanba[1] == OldPacket.packet_start1:
+                                    scanba[2] = ord(self.laserport.read(1))
+                                    if scanba[2] == OldPacket.packet_start2:
+                                            scanba[3] = ord(self.laserport.read(1))
+                                            if scanba[3] == OldPacket.packet_start3:
+                                            
+					        insync=1
                 #
                 # We got a marker value and a matching slice value
                 # Read the remaining bytes and do the checksum calculation
@@ -260,11 +193,11 @@ class Laser (object):
 		if insync == 1:
 		        try:
                                 # read the final Packet.payload_length bytes
-                                charbuffer = self.laserport.read(Packet.payload_length)
-                                if len(charbuffer) == Packet.payload_length:
-                                        scanba[2:2+Packet.payload_length] = map(ord,charbuffer)
+                                charbuffer = self.laserport.read(OldPacket.payload_length)
+                                if len(charbuffer) == OldPacket.payload_length:
+                                        scanba[4:4+OldPacket.payload_length] = map(ord,charbuffer)
                                 # unpack the data conformant with the structure def
-                                slice_pkt = Packet(scanba)
+                                slice_pkt = OldPacket(scanba)
                                         
 			except IOError,e:
 				print("Failed trying to read scanline {:x}".format(scanhdr))
@@ -282,12 +215,12 @@ class Laser (object):
                 #
                 #  Loop over all of the slices 
                 #
-                for slice_index in range(Packet.slices_in_rotation):
+                for slice_index in range(OldPacket.slices_in_rotation):
                         try:
                                 if self.laserport == None:
                                         # drop in a synthetic packet when there is no lidar
-                                        packet_str  = "fb{:02x}0040fe002200fc014400f803660077808800abcd".format(slice_index+Packet.index_offset)
-                                        packet = Packet(binascii.unhexlify(packet_str))
+                                        packet_str  = "5aa500c040fe002200fc014400f803660077808800888088008880880088"
+                                        packet = OldPacket(binascii.unhexlify(packet_str))
                                 else:
 	                                packet = self.packet_for_slice(slice_index)
                                 rotation.append(packet)
@@ -301,7 +234,7 @@ class Laser (object):
                 if self.laserport == None:
                         # sleep like it took some time to get the data if we are faking it
                         elapsed_time = 60.0 / float(packet.rpm) 
-                        logger.info("Sleeping for {:02f} seconds".format(elapsed_time))
+                        print("Sleeping for {:02f} seconds".format(elapsed_time))
                         sleep(elapsed_time)
 
                 # return either the real or the synthetic rotation
@@ -311,7 +244,7 @@ class Laser (object):
 #
 #  A single rotation of lidar data
 #
-class Rotation(object):
+class OldRotation(object):
         """
         Rotation stores the lidar packets for a single rotation.
         Rotation provides reduced, transformed, and/or sanitized
@@ -331,13 +264,13 @@ class Rotation(object):
         heading range from scan-to-scan.
         """
         left_to_right = (-90, 91)
-        full_rotation_packets = 90
+        full_rotation_packets = 1
         
         def __init__(self, rotation_packets):
                 """Create a single rotation view of the world"""
                 self.packets = rotation_packets
 
-                if len(self.packets) != Rotation.full_rotation_packets:
+                if len(self.packets) != OldRotation.full_rotation_packets:
                         print("Not playing with a full rotation of data, dude!")
 
                 #
@@ -352,7 +285,7 @@ class Rotation(object):
                                            key = lambda x: x.heading)
                 
                 view_readings = [self.all_readings[i]
-                                 for i in range(*Rotation.left_to_right)
+                                 for i in range(*OldRotation.left_to_right)
                                  if not self.all_readings[i].discard]
 
                 #
@@ -372,7 +305,7 @@ class Rotation(object):
         
         def cartesian_data(self):
                 """Return an array of clean cartesian data points (left to right)"""
-                return [Rotation.polar_to_cart(theta, r) for theta, r in self.view_data]
+                return [OldRotation.polar_to_cart(theta, r) for theta, r in self.view_data]
         
         def rpm(self):
                 """report an rpm value collected in this rotation"""
@@ -385,90 +318,3 @@ class Rotation(object):
         def __getitem__(self, ndx):
                 return self.view_data[ndx]
 
-                
-#
-#   Open up the serial port, get lidar data and write it to a file
-#   every few seconds.
-#
-if __name__ == '__main__':
-
-        FORMAT = '%(asctime)-15s lidar %(message)s'
-        logging.basicConfig(format=FORMAT,level=logging.INFO)
-        logger = logging.getLogger('lidar')
-        lidar_logger = LidarLogger(logger)
-
-        #channel = UDPChannel(remote_ip='10.10.76.100', remote_port=5880,
-        #                     local_ip='10.10.76.221', local_port=52954)
-        channel = UDPChannel()
-        range_at_heading_message = LidarRangeAtHeadingMessage()
-        periodic_message = LidarPeriodicMessage()
-        
-        lp = None
-        
-        # open up the serial port device connected to the lidar
-        try: 	
-		lp = serial.Serial('/dev/tty.usbserial',115200,timeout=1)
-        except: 
-                logger.error('Lidar port could not be opened.')
-
-        # connect the port with the laser and initialize the laser object
-        #lasr = OldLaser(lp)
-        lasr = Laser(lp)
-
-        #
-        #
-	slice_index = 0
-        file_index = 1
-        rotation_time = 0
-        current_time = 0
-        seconds_per_output = 10
-        SECONDS_PER_MINUTE = 60.0
-	while 1: 
-		try:
-                        rotation = Rotation(lasr.gather_full_rotation())
-                        # rotation = OldRotation(lasr.gather_full_rotation())
-                        #
-                        # For now, we just output a lidar data snapshot every 10 seconds
-                        # We will want this for debugging (maybe every second instead)
-                        # change the "seconds_per_output" to tune that.
-                        #
-                        tgt_heading, tgt_range = Analyzer.range_at_heading(rotation.polar_data(), (Analyzer.start, Analyzer.stop))
-                        logging.info("{:d} points yields {:.2f} inches at {:2d} degrees)".format(len(rotation.polar_data()),tgt_range, tgt_heading))
-
-                        # push the newly calculated data into the message
-                        range_at_heading_message.heading = tgt_heading
-                        range_at_heading_message.range = tgt_range
-                        channel.send_to(range_at_heading_message.encode_message())
-
-                        # push periodic message to the bot
-                        periodic_message.status = 'ok'
-                        periodic_message.rpm = rotation.rpm()
-                        channel.send_to(periodic_message.encode_message())
-
- 		except IOError,e:
-                        #  log and notify robot of error
-                        periodic_message.status = 'error'
-                        channel.send_to(periodic_message.encode_message())
-                        logger.error("Failed to gather a full rotation of data.")
-
-                #
-                # get revised instructions from robot
-                #
-                try:
-                        robot_data, robot_address = channel.receive_from()
-                        message_from_robot = RobotMessage(robot_data)
-                        if ((message_from_robot.sender == 'robot') and
-                            (message_from_robot.message == 'sweep')):
-                                Analyzer.start = message_from_robot.start
-                                Analyzer.stop = message_from_robot.stop
-                except socket.timeout:
-                        logger.info("No message received from robot")
-
-                
-                elapsed_time = (SECONDS_PER_MINUTE/float(rotation.rpm()))
-                rotation_time = rotation_time + elapsed_time
-                current_time = current_time + elapsed_time
-                if rotation_time > seconds_per_output:
-                        lidar_logger.log_data(rotation.polar_data())
-                        file_index = file_index + 1
-                        rotation_time = 0
