@@ -25,6 +25,8 @@ from udp_channels import *
 from sensor_message import *
 from field import *
 from  analyzer import *
+from lidar_viewer import LidarLogger, LidarViewer
+
 import logging
 
 class Reading (object):
@@ -299,7 +301,7 @@ class Laser (object):
                 if self.laserport == None:
                         # sleep like it took some time to get the data if we are faking it
                         elapsed_time = 60.0 / float(packet.rpm) 
-                        print("Sleeping for {:02f} seconds".format(elapsed_time))
+                        logger.info("Sleeping for {:02f} seconds".format(elapsed_time))
                         sleep(elapsed_time)
 
                 # return either the real or the synthetic rotation
@@ -391,8 +393,9 @@ class Rotation(object):
 if __name__ == '__main__':
 
         FORMAT = '%(asctime)-15s lidar %(message)s'
-        logging.basicConfig(format=FORMAT)
+        logging.basicConfig(format=FORMAT,level=logging.INFO)
         logger = logging.getLogger('lidar')
+        lidar_logger = LidarLogger(logger)
 
         #channel = UDPChannel(remote_ip='10.10.76.100', remote_port=5880,
         #                     local_ip='10.10.76.221', local_port=52954)
@@ -466,9 +469,6 @@ if __name__ == '__main__':
                 rotation_time = rotation_time + elapsed_time
                 current_time = current_time + elapsed_time
                 if rotation_time > seconds_per_output:
-                        # write out about every 10 seconds to output
-                        file_name = "lidar{:04d}.dat".format(file_index)
-                        logger.info("Time: {:.2f} Exporting current rotation of data to {:s}".format(current_time, file_name))
-                        LidarViewer.write_to_file(file_name, rotation.polar_data())
+                        lidar_logger.log_data(rotation.polar_data())
                         file_index = file_index + 1
                         rotation_time = 0
