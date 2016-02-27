@@ -10,23 +10,28 @@ This program provides methods to get ranging data from a bare(i.e. not in a) Nea
 running 2.6.x firmware
 """
 
-from multiprocessing import Process
 import sys
 import os 
 import serial 
 import pdb
-import numpy as np
-import matplotlib.pyplot as plt
 import struct
 import binascii
 import collections
 import itertools
 import math
-import pylab
 from time import sleep
 import socket
+from udp_channels import *
+from sensor_message import *
+from field import *
+from  analyzer import *
+import logging
 
 class Reading (object):
+        """
+        A reading is a unit of lidar data.  It contains both range and heading
+        information.     There is also some error and warning information.
+        """
         #
         # create the reading from two raw values
         #
@@ -87,6 +92,10 @@ class Reading (object):
 #  `byte 3 : <signal strength 15:8>`
 #
 class Packet (object):
+        """
+        Packet is the parseable unit read from the lidar.   For 2.4 and 2.7,
+        this is 22 bytes containing 4 readings for 4 degrees.
+        """
         packet_start = 0xfa
         index_offset = 0xa0
         payload_length = 20
@@ -106,7 +115,6 @@ class Packet (object):
         # one time init for how to unpack data and tuplify it
         structure_def = struct.Struct(structure_def_str)
         tuple_def = collections.namedtuple('Packet_tuple', tuple_def_str)                
-
         #
         #  Construct useable internal
         #
@@ -141,7 +149,7 @@ class Packet (object):
                 return index_value - Packet.index_offset
 
         #
-        #  Decode the rpd value 
+        #  Decode the rpm value 
         #
         @property
         def rpm(self):
@@ -301,7 +309,7 @@ class Laser (object):
 #
 #  A single rotation of lidar data
 #
-class Rotation:
+class Rotation(object):
         """
         Rotation stores the lidar packets for a single rotation.
         Rotation provides reduced, transformed, and/or sanitized
@@ -364,13 +372,6 @@ class Rotation:
                 """Return an array of clean cartesian data points (left to right)"""
                 return [Rotation.polar_to_cart(theta, r) for theta, r in self.view_data]
         
-        def export_to_file(self, file_name):
-                """open the file file_name and write the rotation data to it"""
-                text_file = open(file_name, "w")
-                for p in self.packets:
-                        text_file.write(p.as_data())
-                text_file.close()
-
         def rpm(self):
                 """report an rpm value collected in this rotation"""
                 return self.packets[0].rpm
@@ -382,40 +383,33 @@ class Rotation:
         def __getitem__(self, ndx):
                 return self.view_data[ndx]
 
-        def range_at_heading(self, sweep):
-                """put out the heading represented by heading sweep"""
-
-                min_reading = (0, 0)
-                sweep_data = [x for x in self.view_data if x[0] in range(*sweep)]
-
-                if sweep_data:
-                        min_reading = min(sweep_data, key=lambda r:r[1])
-
-                return min_reading
                 
-        
-def handle_message(msg, rotation):
-        print("Handling message: {:s}".format(msg))
-        return "OK"
-
-
 #
 #   Open up the serial port, get lidar data and write it to a file
 #   every few seconds.
 #
 if __name__ == '__main__':
 
-        sock = None
-        # sock = UDP_socket("127.0.0.1", 7007)
+        FORMAT = '%(asctime)-15s lidar %(message)s'
+        logging.basicConfig(format=FORMAT)
+        logger = logging.getLogger('lidar')
+
+        #channel = UDPChannel(remote_ip='10.10.76.100', remote_port=5880,
+        #                     local_ip='10.10.76.221', local_port=52954)
+        channel = UDPChannel()
+        range_at_heading_message = LidarRangeAtHeadingMessage()
+        periodic_message = LidarPeriodicMessage()
+        
         lp = None
         
         # open up the serial port device connected to the lidar
         try: 	
 		lp = serial.Serial('/dev/tty.usbserial',115200,timeout=1)
         except: 
-		print("Could not open serial port for laser!")
+                logger.error('Lidar port could not be opened.')
 
         # connect the port with the laser and initialize the laser object
+        #lasr = OldLaser(lp)
         lasr = Laser(lp)
 
         #
@@ -429,33 +423,52 @@ if __name__ == '__main__':
 	while 1: 
 		try:
                         rotation = Rotation(lasr.gather_full_rotation())
+                        # rotation = OldRotation(lasr.gather_full_rotation())
+                        #
+                        # For now, we just output a lidar data snapshot every 10 seconds
+                        # We will want this for debugging (maybe every second instead)
+                        # change the "seconds_per_output" to tune that.
+                        #
+                        tgt_heading, tgt_range = Analyzer.range_at_heading(rotation.polar_data(), (Analyzer.start, Analyzer.stop))
+                        logging.info("{:d} points yields {:.2f} inches at {:2d} degrees)".format(len(rotation.polar_data()),tgt_range, tgt_heading))
+
+                        # push the newly calculated data into the message
+                        range_at_heading_message.heading = tgt_heading
+                        range_at_heading_message.range = tgt_range
+                        channel.send_to(range_at_heading_message.encode_message())
+
+                        # push periodic message to the bot
+                        periodic_message.status = 'ok'
+                        periodic_message.rpm = rotation.rpm()
+                        channel.send_to(periodic_message.encode_message())
+
  		except IOError,e:
-			print("failed to gather lidar rotation")
+                        #  log and notify robot of error
+                        periodic_message.status = 'error'
+                        channel.send_to(periodic_message.encode_message())
+                        logger.error("Failed to gather a full rotation of data.")
 
                 #
-                # Here we could read the input work queue looking for requests
-                # And formulate answers to send to the requestor
-                if sock != None:
-                        data, addr = sock.recvfrom()
-                        print("MESSAGE:"+data)
-                        response  = handle_message(data, rotation)
-                        sock.sendto(response)
-
+                # get revised instructions from robot
                 #
-                # For now, we just output a lidar data snapshot every 10 seconds or so
-                # We will want this for debugging (maybe every second instead)
-                # change the "seconds_per_output" to tune that.
-                #
-                range_at_heading = rotation.range_at_heading((-10, 10))
-                print("Range at heading (-10,10) is {:.2f} inches at {:2d} degrees)".format(range_at_heading[1],range_at_heading[0]))
+                try:
+                        robot_data, robot_address = channel.receive_from()
+                        message_from_robot = RobotMessage(robot_data)
+                        if ((message_from_robot.sender == 'robot') and
+                            (message_from_robot.message == 'sweep')):
+                                Analyzer.start = message_from_robot.start
+                                Analyzer.stop = message_from_robot.stop
+                except socket.timeout:
+                        logger.info("No message received from robot")
 
+                
                 elapsed_time = (SECONDS_PER_MINUTE/float(rotation.rpm()))
                 rotation_time = rotation_time + elapsed_time
                 current_time = current_time + elapsed_time
                 if rotation_time > seconds_per_output:
                         # write out about every 10 seconds to output
                         file_name = "lidar{:04d}.dat".format(file_index)
-                        print("Time: {:.2f} Exporting current rotation of data to {:s}".format(current_time, file_name))
-                        rotation.export_to_file(file_name)
+                        logger.info("Time: {:.2f} Exporting current rotation of data to {:s}".format(current_time, file_name))
+                        LidarViewer.write_to_file(file_name, rotation.polar_data())
                         file_index = file_index + 1
                         rotation_time = 0

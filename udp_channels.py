@@ -5,12 +5,17 @@ import socket
 #  long.
 #
 class UDPChannel:
+        default_local_port = 52777
+        default_remote_port = 52888
         # Useful defaults permit minimal arguments for simple test.
         # On one end:
         #      sender = UDPChannel()
         #    receiver = UDPChannel(local_port=sender.remote_port, remote_port=sender.local_port)
-        def __init__(self, local_ip="127.0.0.1", local_port=52777,
-                     remote_ip="127.0.0.1", remote_port=52888,
+        def __init__(self,
+                     local_ip="127.0.0.1",
+                     local_port=default_local_port,
+                     remote_ip="127.0.0.1",
+                     remote_port=default_remote_port,
                      timeout_in_seconds=0.001, receive_buffer_size=1024):
                 """Create the sending and receiving sockets for a communcation channel"""
                 self.local_ip = local_ip

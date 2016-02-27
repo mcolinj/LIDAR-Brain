@@ -55,6 +55,7 @@ def test_udp_channel():
 
     try:
         data, addr = local.receive_from()
+        assert False, "Should have timed out, but did not."
     except:
         print("local.receive_from() timed out")
 

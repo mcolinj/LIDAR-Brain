@@ -3,6 +3,7 @@ import pylab
 import matplotlib.pyplot as plt
 import itertools
 import math
+from analyzer import *
 import pdb
 
 MM_PER_INCH = 25.4
@@ -243,7 +244,7 @@ class FieldModel (object):
 
     @staticmethod
     def tower_range_from_origin():
-            return (FieldModel.field_depth - FieldModel.tower_depth) / FieldModel.scale
+        return (FieldModel.field_depth - FieldModel.tower_depth) / FieldModel.scale
 
     @staticmethod
     def round_degrees(theta, radius):
@@ -290,6 +291,8 @@ if __name__ == '__main__':
                 distance = int(cmd_arg)
                 robot.move(distance)
                 rotation = FakeRotation(field_model, robot)
+                sweep_heading, sweep_range = Analyzer.range_at_heading(rotation.polar_data(), (-5, 6))
+                print("Closest point in (-5,6) sweep is ({:d},{:.2f})".format(sweep_heading, sweep_range))
                 lidar_viewer.plot_polar(rotation.polar_data())
             except ValueError:
                 print "Please specify distance in whole inches."
@@ -299,6 +302,8 @@ if __name__ == '__main__':
                 heading = int(cmd_arg)
                 robot.turn(heading)
                 rotation = FakeRotation(field_model, robot)
+                sweep_heading, sweep_range = Analyzer.range_at_heading(rotation.polar_data(), (-5, 6))
+                print("Closest point in (-5,6) sweep is ({:d},{:.2f})".format(sweep_heading, sweep_range))
                 lidar_viewer.plot_polar(rotation.polar_data())
             except ValueError:
                 print "Please specify turn in whole degrees."
