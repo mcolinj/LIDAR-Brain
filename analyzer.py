@@ -22,7 +22,7 @@ class Analyzer:
             
         return min_reading
 
-def r_squared (*pairs):
+def r_squared (pairs):
     #This calculates r-squared for 4 points
     #I split the equation into 3 variables to minimize risk of a mistake
     length = len(pairs)
@@ -34,7 +34,6 @@ def r_squared (*pairs):
     	combination1 = float(numerator) / float(denominator1*denominator2)
     	combination2 = combination1**2
     	return combination2
-    	
     else:
     	print "There was a denominator of zero"
     	return 0.0

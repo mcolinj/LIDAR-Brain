@@ -44,8 +44,8 @@ class FakeRotation:
         return self.view_data
 
     def cartesian_data(self):
-        return [FakeRotation.polar_to_cart(theta,radius)
-                for theta, radius in self.polar_data]
+        return [FakeRotation.polar_to_cart(-theta, radius)
+                for theta, radius in self.polar_data()]
 
     def write_to_file(self, file_name):
         LidarViewer.write_to_file(file_name, polar_data)
