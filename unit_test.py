@@ -2,9 +2,9 @@ from laser import *
 import binascii
 import pdb
 from udp_channels import UDPChannel
-from field import *
+from field_model import FieldModel, Robot, FakeRotation
 from laser import *
-from analyzer import *
+from analyzer import Analyzer
 import math
 
 def test_reading():
