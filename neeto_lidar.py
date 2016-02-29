@@ -28,6 +28,10 @@ from lidar_logger import LidarLogger
 from laser import Laser, Reading, Packet, Rotation
 
 import logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 
 #
 #   Open up the serial port, get lidar data and write it to a file
@@ -35,22 +39,18 @@ import logging
 #
 if __name__ == '__main__':
 
-        FORMAT = '%(asctime)-15s lidar %(message)s'
-        logging.basicConfig(format=FORMAT,level=logging.INFO)
-        logger = logging.getLogger('lidar')
-        lidar_logger = LidarLogger(logger)
-
-        #channel = UDPChannel(remote_ip='10.10.76.100', remote_port=5880,
-        #                     local_ip='10.10.76.221', local_port=52954)
-        channel = UDPChannel()
+        channel = UDPChannel(remote_ip='10.10.76.100', remote_port=5880,
+                              local_ip='0.0.0.0', local_port=52954)
+        #channel = UDPChannel()
         range_at_heading_message = LidarRangeAtHeadingMessage()
         periodic_message = LidarPeriodicMessage()
+        lidar_logger = LidarLogger(logger)
         
         lp = None
         
         # open up the serial port device connected to the lidar
         try: 	
-		lp = serial.Serial('/dev/tty.usbserial',115200,timeout=1)
+		lp = serial.Serial('/dev/ttyUSB0',115200,timeout=1)
         except: 
                 logger.error('Lidar port could not be opened.')
 
@@ -76,7 +76,7 @@ if __name__ == '__main__':
                         # change the "seconds_per_output" to tune that.
                         #
                         tgt_heading, tgt_range = Analyzer.range_at_heading(rotation.polar_data(), (Analyzer.start, Analyzer.stop))
-                        logging.info("{:d} points yields {:.2f} inches at {:2d} degrees)".format(len(rotation.polar_data()),tgt_range, tgt_heading))
+                        logger.info("{:d} points yields {:.2f} inches at {:2d} degrees)".format(len(rotation.polar_data()),tgt_range, tgt_heading))
 
                         # push the newly calculated data into the message
                         range_at_heading_message.heading = tgt_heading
