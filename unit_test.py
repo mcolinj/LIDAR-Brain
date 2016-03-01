@@ -1,10 +1,11 @@
+from __future__ import print_function
 from laser import *
 import binascii
 import pdb
 from udp_channels import UDPChannel
-from field import *
+from field_model import FieldModel, Robot, FakeRotation
 from laser import *
-from analyzer import *
+from analyzer import Analyzer, r_squared
 import math
 
 def test_reading():
@@ -113,4 +114,44 @@ def test_sensor_messages():
     assert lrah1.encode_message() == lrah2.encode_message()
     
 
+def test_r_squared():
+    #  simple 45 degree line
+    data = [(1,1), (2,2), (3,3), (4,4)]
+    r2 = r_squared(data)
+    assert round(1000*r2) == 1000
+
+    #  simple -45 degree line
+    data = [(-1,1), (-2,2), (-3,3), (-4,4)]
+    r2 = r_squared(data)
+    assert round(1000*r2) == 1000
+
+    #  horizontal line
+    data = [(1,5), (2,5), (3,5), (4,5)]
+    r2 = r_squared(data)
+    #print r2
+    #assert round(1000*r2) == 1000
+
+    #  vertical line
+    data = [(5,1), (5,2), (5,3), (5,4)]
+    r2 = r_squared(data)
+    #print r2
+    #assert r2 == 0
+
+
+    #  more interesting line
+    data = [(1,1), (2,2), (3,4), (4,1), (7,8), (12,14)]
+    r2 = r_squared(data)
+    #print r2
+
+
+    #  now let's try from the field model  (what is the r_squared on the whole thing?)
+    f = FieldModel()
+    rotation = FakeRotation(f)
+    cart_data = rotation.cartesian_data()
+    for i in range(0, len(cart_data)-4):
+        slice = cart_data[i:i+4]
+        r2 = r_squared(slice)
+        print("{:.2f}".format(r2),end=" => ")
+        print(slice)
+        
     

@@ -1,9 +1,5 @@
-import numpy as np
 import itertools
 import math
-from analyzer import *
-from lidar_viewer import LidarLogger, LidarViewer
-import pdb
 
 MM_PER_INCH = 25.4
 
@@ -48,8 +44,8 @@ class FakeRotation:
         return self.view_data
 
     def cartesian_data(self):
-        return [FakeRotation.polar_to_cart(theta,radius)
-                for theta, radius in self.polar_data]
+        return [FakeRotation.polar_to_cart(-theta, radius)
+                for theta, radius in self.polar_data()]
 
     def write_to_file(self, file_name):
         LidarViewer.write_to_file(file_name, polar_data)
@@ -209,55 +205,4 @@ class FieldModel (object):
     def translate(x, y, origin):
         """translate the data points for the robot origin"""
         return x - origin[0], y - origin[1]
-
-if __name__ == '__main__':
-
-    # put robot at the origin
-    robot = Robot((0,0), 0)
-    field_model = FieldModel()
-    lidar_viewer = LidarViewer()
-        
-    while True:
-        text = raw_input("Enter command (mOVE,tURN,sHOW,iNFO,0(origin),hELP or qQUIT): ")
-        cmd  = text.split(" ")[0]
-        
-        #If we see a quit command, well, quit
-        if cmd == "q":
-            break
-            
-        #Reset robot to the origin with 0 turn
-        if cmd == "0":
-            robot = Robot((0,0), 0)
-        elif cmd == "i":
-            x,y = robot.position
-            print("Robot is at ({:f}, {:f} turned {:d} degrees".format(x, y, r.heading))
-        elif cmd == "s":
-            rotation = FakeRotation(field_model, robot)
-            lidar_viewer.plot_polar(rotation.polar_data())
-        elif cmd == "m":
-            try:
-                cmd,cmd_arg = text.split(" ")
-                distance = int(cmd_arg)
-                robot.move(distance)
-                rotation = FakeRotation(field_model, robot)
-                sweep_heading, sweep_range = Analyzer.range_at_heading(rotation.polar_data(), (-5, 6))
-                print("Closest point in (-5,6) sweep is ({:d},{:.2f})".format(sweep_heading, sweep_range))
-                lidar_viewer.plot_polar(rotation.polar_data())
-            except ValueError:
-                print "Please specify distance in whole inches."
-        elif cmd == "t":
-            try:
-                cmd,cmd_arg = text.split(" ")
-                heading = int(cmd_arg)
-                robot.turn(heading)
-                rotation = FakeRotation(field_model, robot)
-                sweep_heading, sweep_range = Analyzer.range_at_heading(rotation.polar_data(), (-5, 6))
-                print("Closest point in (-5,6) sweep is ({:d},{:.2f})".format(sweep_heading, sweep_range))
-                lidar_viewer.plot_polar(rotation.polar_data())
-            except ValueError:
-                print "Please specify turn in whole degrees."
-        elif cmd == "w":
-            lidar_viewer.write_to_file("Lidar.dat", rotation.polar_data())
-        elif cmd == "h":
-            print "Enter single letter command and optional argument."
 
