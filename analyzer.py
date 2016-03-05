@@ -8,6 +8,10 @@ class Analyzer:
     """
     start = -10
     stop = 10
+    r2_min = 0.7
+    #
+    #
+    #
     @staticmethod
     def range_at_heading(polar_data, sweep):
         """
@@ -38,7 +42,38 @@ def r_squared (pairs):
     else:
     	print "There was a denominator of zero"
     	return 0.0
-    
+
+def magnitude_checker (i, d, array):
+    """This finds the magnitude and the closest point to the robot"""
+    i2d = array[i:d]
+    r2 = r_squared(i2d)
+    if (r2 < Analyzer.r2_min) or (d >= len(array)-1):
+        closest_point = (999, 999)
+        smallest = i2d[0]
+        largest = i2d[-1]
+        magnitude = math.sqrt( (largest[0] - smallest[0])**2 + (largest[1] - smallest[1])**2 )
+        for x,y in i2d:
+            if (  x**2 + y**2 < closest_point[0]**2 + closest_point[1]**2 ):
+                closest_point = (x, y)
+        return (magnitude, closest_point)
+    else:
+        return magnitude_checker(i, d+1, array)
+
+def find_wall (array):
+    """This does the stuff necessary to find the wall and the closest point on it"""
+    magnitudes_and_points = []
+    for i in range(0, len(array)-3):
+    # Since magnitudeChecker returns the magnitude and closest point, this puts the former at index 0 and the latter at index 1
+        magnitudes_and_points.append( magnitude_checker(i, i+4, array) )
+
+        (mag, point) = magnitudes_and_points[0]
+        for m,p in magnitudes_and_points:
+            if m > mag:
+                mag = m
+                point = p
+
+    return (mag, point)
+
 def avg_distance (cart_data):
     distances = map(lambda(x,y): math.sqrt(x**2+y**2), cart_data)
     return stats.mean(distances)

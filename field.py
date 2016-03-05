@@ -25,7 +25,7 @@ def update_all_results (lidar_viewer, field_model, robot, factor):
         slice = cart_data[i:i+factor]
         r2 = r_squared(slice)
         # start or continue
-        if r2 > .9:
+        if r2 > .7:
             if building_vector_start is not None:
                 building_vector_end = slice[0]
             else:

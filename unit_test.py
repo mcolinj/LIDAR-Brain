@@ -5,7 +5,7 @@ import pdb
 from udp_channels import UDPChannel
 from field_model import FieldModel, Robot, FakeRotation
 from laser import *
-from analyzer import Analyzer, r_squared
+from analyzer import Analyzer, r_squared, find_wall
 import math
 
 def test_reading():
@@ -153,5 +153,26 @@ def test_r_squared():
         r2 = r_squared(slice)
         print("{:.2f}".format(r2),end=" => ")
         print(slice)
-        
+
+def test_find_wall ():
+    """quick sanity check to make sure that things run"""
+    f = FieldModel()
+    r = Robot()
+
+    rotation = FakeRotation(f, r)
+    cart_data = rotation.cartesian_data()
+
+    (wall_magnitude, point) = find_wall(cart_data)
+    (x, y) = point
+
+    #
+    # These values should be verified, but they look *close*.
+    # Should add this function with some nicely colored output
+    # into the field.py simulation.
+    #
+    assert round(wall_magnitude,1) == 153.7
+    assert round(x,1) == 140.5
+    assert round(y,1) == 22.3
     
+        
+
