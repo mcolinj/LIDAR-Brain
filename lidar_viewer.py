@@ -1,6 +1,7 @@
 import pylab
 import math
 import logging
+from field_model import FieldModel
 
 class LidarLogger ():
     def __init__ (self, logger):
@@ -22,12 +23,23 @@ class LidarViewer (object):
     def round_degrees(theta, radius):
         return int(round(theta)), radius
     
-    def __init__ (self):
-        self.fig = pylab.figure(figsize=(9,9))
-        self.ax = self.fig.add_subplot(111, projection='polar')
-        self.ax.set_rmax(240)
-        self.ax.grid(True)
+    @staticmethod
+    def cart_to_polar(x, y):
+        """convert cartesian to polar data."""
+        """Map (x,y) to (theta, radius).  Theta is in degrees."""
+        return math.degrees(math.atan2(y, x)), math.sqrt(x**2+y**2)
 
+    def __init__ (self):
+        self.fig = pylab.figure(figsize=(8,4))
+        self.pax = self.fig.add_subplot(121, projection='polar')
+        self.pax.set_rmax(240)
+        self.pax.grid(True)
+
+        self.cax = self.fig.add_subplot(122,aspect='equal')
+        self.cax.set_autoscale_on(False)
+        self.cax.set_xlim([-FieldModel.field_width/10,FieldModel.field_width/10])
+        self.cax.set_ylim([-FieldModel.field_width/10,FieldModel.field_width/10])
+        
     def plot (self, rotation):
         self.plot_polar(rotation)
         
@@ -36,9 +48,14 @@ class LidarViewer (object):
         theta = map(math.radians, theta)
         robot_r = [ -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5 ]
         robot_theta = [0]*11
-        self.ax.cla()
-        self.ax.plot(theta, radius, 'x', color='r', linewidth=3)
-        self.ax.plot(robot_theta, robot_r, 'x', color='b', linewidth=3)
+        self.pax.cla()
+        self.pax.plot(theta, radius, 'x', color='r', linewidth=3)
+        self.pax.plot(robot_theta, robot_r, 'x', color='b', linewidth=3)
+        pylab.show(block=False)
+
+    def plot_markers (self, markers, marker_color):
+        x, y = zip(*markers)
+        self.cax.plot(x, y, 'o', color=marker_color, linewidth=3)
         pylab.show(block=False)
         
     def plot_cartesian (self, cartesian_data):
@@ -46,14 +63,10 @@ class LidarViewer (object):
         Do a simple plot of cartesian data.   Not generally useful,
         except for plotting the cartesian version of the field model.
         """
-        self.fig = pylab.figure(figsize=(9,9))
-        self.axes = self.fig.add_subplot(111,aspect='equal')
-        self.axes.set_autoscale_on(False)
-        self.axes.set_xlim([-FieldModel.field_width,FieldModel.field_width])
-        self.axes.set_ylim([-FieldModel.field_width,FieldModel.field_width])
-
         x, y  = zip(*cartesian_data)
-
-        self.axes.plot(x, y, 'x')
+        self.cax.cla()
+        self.cax.plot(x, y, 'x', color='r')
+        self.cax.set_xlim([-FieldModel.field_width/10,FieldModel.field_width/10])
+        self.cax.set_ylim([-FieldModel.field_width/10,FieldModel.field_width/10])
         pylab.show(block=False)
 

@@ -29,7 +29,7 @@ class FakeRotation:
         # then group all of the points by degree measure
         tmp_data = itertools.groupby(tmp_data, lambda x: int(round(x[0])))
         # pick the closest one in each group because it shadows the others
-        self.view_data = [min(interval, key=lambda x: x[1]) for _, interval in tmp_data]
+        self.view_data = [min(interval, key=lambda x: x[1]) for _, interval in tmp_data][::-1]
         self.origin = robot.position
         self.orientation = robot.heading
         self.rpm = rpm
@@ -44,7 +44,7 @@ class FakeRotation:
         return self.view_data
 
     def cartesian_data(self):
-        return [FakeRotation.polar_to_cart(-theta, radius)
+        return [FakeRotation.polar_to_cart(theta, radius)
                 for theta, radius in self.polar_data()]
 
     def write_to_file(self, file_name):

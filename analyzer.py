@@ -1,4 +1,5 @@
 import math
+import statistics as stats
 
 class Analyzer:
     """
@@ -38,6 +39,9 @@ def r_squared (pairs):
     	print "There was a denominator of zero"
     	return 0.0
     
+def avg_distance (cart_data):
+    distances = map(lambda(x,y): math.sqrt(x**2+y**2), cart_data)
+    return stats.mean(distances)
     
     # double numerator = 4*(pair1->x*pair1->y + pair2->x*pair2->y + pair3->x*pair3->y + pair4->x*pair4->y)
 #     - ( (pair1->x + pair2->x + pair3->x + pair4->x) * (pair1->y + pair2->y + pair3->y + pair4->y) );
