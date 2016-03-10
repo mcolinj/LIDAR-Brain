@@ -64,7 +64,7 @@ class LidarViewer (object):
         except for plotting the cartesian version of the field model.
         """
         x, y  = zip(*cartesian_data)
-        self.cax.cla()
+        #self.cax.cla()
         self.cax.plot(x, y, 'x', color='r')
         self.cax.set_xlim([-FieldModel.field_width/10,FieldModel.field_width/10])
         self.cax.set_ylim([-FieldModel.field_width/10,FieldModel.field_width/10])

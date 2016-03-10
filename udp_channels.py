@@ -1,12 +1,15 @@
 import socket
+import logging
 #
 #  Create the infra for two-way communication channel using UDP
 #  Set receive from timeout to .001 seconds to avoid blocking for
 #  long.
 #
 class UDPChannel:
-        default_local_port = 52777
-        default_remote_port = 52888
+        default_local_port = 5277
+        default_remote_port = 5288
+        logger = logging.getLogger(__name__)
+
         # Useful defaults permit minimal arguments for simple test.
         # On one end:
         #      sender = UDPChannel()
@@ -16,12 +19,13 @@ class UDPChannel:
                      local_port=default_local_port,
                      remote_ip="127.0.0.1",
                      remote_port=default_remote_port,
-                     timeout_in_seconds=0.001, receive_buffer_size=1024):
+                     timeout_in_seconds=0.001, receive_buffer_size=8192):
                 """Create the sending and receiving sockets for a communcation channel"""
                 self.local_ip = local_ip
                 self.local_port = local_port
                 self.remote_ip = remote_ip
                 self.remote_port = remote_port
+
 
                 # create the receive socket
                 self.receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -35,7 +39,12 @@ class UDPChannel:
                 self.receive_buffer_size = receive_buffer_size
 
         def send_to(self, message):
-                self.send_socket.sendto(message, (self.remote_ip, self.remote_port))
+                try:
+                        self.send_socket.sendto(message, (self.remote_ip, self.remote_port))
+                except IOError,e:
+                        UDPChannel.logger.error("Unable to send to: {}".format(self.remote_ip))
+                        
+
         def reply_to(self, message, (ip, port)):
                 self.send_socket.sendto(message, (ip, port))
 

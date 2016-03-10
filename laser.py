@@ -71,6 +71,11 @@ class Reading (object):
                         return 777
                 else:
                         return self.range / Reading.MM_PER_INCH
+
+        @property
+        def raw_range_in_inches(self):
+                return self.range / Reading.MM_PER_INCH
+        
         #
         #  The formal representation of the reading contains the index (degrees)
         #  and the range in inches.
@@ -330,7 +335,7 @@ class Rotation(object):
         scan based upon the change in the range reported by the same
         heading range from scan-to-scan.
         """
-        left_to_right = (-90, 91)
+        right_to_left = (-90, 91)
         full_rotation_packets = 90
         
         def __init__(self, rotation_packets):
@@ -350,10 +355,10 @@ class Rotation(object):
                 #
                 self.all_readings = sorted(list(itertools.chain(*self.packets)),
                                            key = lambda x: x.heading)
-                
+
                 view_readings = [self.all_readings[i]
-                                 for i in range(*Rotation.left_to_right)
-                                 if not self.all_readings[i].discard]
+                                 for i in range(*Rotation.right_to_left)
+                                 if not self.all_readings[i].error]
 
                 #
                 #  For ease of manipulation, the view data is just stored as
