@@ -120,9 +120,9 @@ class FieldModel (object):
         scaled_by_10_data = [(x, FieldModel.field_depth)
                            for x in xrange(-FieldModel.field_width, -FieldModel.tower_width)]
 
-        # set up an infinity back wall behind the tower
-        scaled_by_10_data.extend((x, FieldModel.field_depth+FieldModel.back_back)
-                                 for x in range(-FieldModel.back_width, FieldModel.back_width))
+        # no need for infinity back wall behind the tower
+        #scaled_by_10_data.extend((x, FieldModel.field_depth+FieldModel.back_back)
+        #                         for x in range(-FieldModel.back_width, FieldModel.back_width))
         #
         # generate points for the left facet (with 16" opening)  This is 3 points on either
         # side of the goal, running along a line that is 120 degrees (with a slope of -sqrt(3)

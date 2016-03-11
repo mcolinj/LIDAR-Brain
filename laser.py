@@ -279,8 +279,10 @@ class Laser (object):
         #
         # Collect a complete set of packets and concatenate them into
         #
-        def gather_full_rotation(self):
-                """Read a rotation of lidar data and return it as a collection of packets"""
+        def gather_full_rotation(self,reverse_data=True):
+                """
+                Read a rotation of lidar data and return it as a collection of packets
+                """
                 rotation = []
                 slice_index = 0
 
@@ -309,8 +311,11 @@ class Laser (object):
                         logger.info("Sleeping for {:02f} seconds".format(elapsed_time))
                         sleep(elapsed_time)
 
-                # return either the real or the synthetic rotation
-                return rotation
+                # return the data (maybe reversed if the lidar is upside down?)
+                if reverse_data:
+                        return rotation[::-1]
+                else:
+                        return rotation
 
 
 #

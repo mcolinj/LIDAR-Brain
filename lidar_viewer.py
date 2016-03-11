@@ -1,6 +1,6 @@
-import pylab
 import math
 import logging
+import matplotlib.pyplot as plt
 from field_model import FieldModel
 
 class LidarLogger ():
@@ -30,7 +30,7 @@ class LidarViewer (object):
         return math.degrees(math.atan2(y, x)), math.sqrt(x**2+y**2)
 
     def __init__ (self):
-        self.fig = pylab.figure(figsize=(8,4))
+        self.fig = plt.figure(figsize=(8,4))
         self.pax = self.fig.add_subplot(121, projection='polar')
         self.pax.set_rmax(240)
         self.pax.grid(True)
@@ -51,12 +51,18 @@ class LidarViewer (object):
         self.pax.cla()
         self.pax.plot(theta, radius, 'x', color='r', linewidth=3)
         self.pax.plot(robot_theta, robot_r, 'x', color='b', linewidth=3)
-        pylab.show(block=False)
+        plt.show(block=False)
+
+    def plot_polar_markers (self, markers, marker_color):
+        theta, radius = zip(*markers)
+        theta = map(math.radians, theta)
+        self.pax.plot(theta, radius, 'o', color=marker_color, linewidth=3)
+        plt.show(block=False)
 
     def plot_markers (self, markers, marker_color):
         x, y = zip(*markers)
         self.cax.plot(x, y, 'o', color=marker_color, linewidth=3)
-        pylab.show(block=False)
+        plt.show(block=False)
         
     def plot_cartesian (self, cartesian_data):
         """
@@ -64,9 +70,9 @@ class LidarViewer (object):
         except for plotting the cartesian version of the field model.
         """
         x, y  = zip(*cartesian_data)
-        #self.cax.cla()
+        self.cax.cla()
         self.cax.plot(x, y, 'x', color='r')
         self.cax.set_xlim([-FieldModel.field_width/10,FieldModel.field_width/10])
         self.cax.set_ylim([-FieldModel.field_width/10,FieldModel.field_width/10])
-        pylab.show(block=False)
+        plt.show(block=False)
 

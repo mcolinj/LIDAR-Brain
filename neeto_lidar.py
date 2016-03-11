@@ -23,7 +23,7 @@ from time import sleep
 import socket
 from udp_channels import *
 from sensor_message import *
-from analyzer import Analyzer
+from analyzer import Analyzer, find_wall_midpoint
 #from lidar_viewer import LidarLogger
 from laser import Laser, Reading, Packet, Rotation
 
@@ -45,6 +45,7 @@ if __name__ == '__main__':
                               local_ip='0.0.0.0', local_port=52954)
         range_at_heading_message = LidarRangeAtHeadingMessage()
         periodic_message = LidarPeriodicMessage()
+        wall_message = LidarWallMessage()
         #lidar_logger = LidarLogger(logger)
 
         file_index = 1
@@ -86,8 +87,9 @@ if __name__ == '__main__':
 
                 if lasr is not None:
                         try:
-                                rotation = Rotation(lasr.gather_full_rotation())
-                                # rotation = OldRotation(lasr.gather_full_rotation())
+                                # NOTE: because lidar is upside down, this needs to be reversed?
+                                rotation = Rotation(lasr.gather_full_rotation(reverse_data=True))
+                                
                                 #
                                 # For now, we just output a lidar data snapshot every 10 seconds
                                 # We will want this for debugging (maybe every second instead)
@@ -105,6 +107,20 @@ if __name__ == '__main__':
                                 periodic_message.status = 'ok'
                                 periodic_message.rpm = rotation.rpm()
                                 channel.send_to(periodic_message.encode_message())
+
+                                #
+                                # send out the wall heading and distance report
+                                #
+                                (wall_heading, wall_distance, wall_orientation) = find_wall_midpoint(rotation.cartesian_data())
+                                logger.info("find_wall_midpoint => heading {:.1f}, range {:.1f}, orientation {:.1f})".format(wall_heading, wall_distance, wall_orientation))
+                                if (wall_heading, wall_distance, wall_orientation) == (0, 0, 0):
+                                        wall_message.status = 'error'
+                                else:
+                                        wall_message.status = 'ok'
+                                        wall_message.range = wall_distance
+                                        wall_message.heading = wall_heading
+                                        wall_message.orientation = wall_orientation
+                                channel.send_to(wall_message.encode_message())
                                 
  		        except IOError,e:
                                 #  log and notify robot of error

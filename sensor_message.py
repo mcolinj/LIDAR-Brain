@@ -61,6 +61,27 @@ class LidarPeriodicMessage(SensorMessage):
         self.rpm = 0
         self.status = 'ok'
 
+class LidarWallMessage(SensorMessage):
+    """
+    Convenience class for sending wall messages.
+
+    To send a message to the robo rio, just do the following:
+
+    wall_message = LidarWallMessage()
+    wall_message.status = 'ok'
+    wall_message.orientation = <degrees to turn to be parallel to wall>
+    wall_message.heading = <degree heading to midpoint of wall>
+    wall_message.range = <range to the midpoint>
+
+    channel_to_rio.send_to(wall_message.encode_message())
+    """
+    def __init__(self, name="lidar", message="wall"):
+        super(LidarWallMessage,self).__init__(name, message)
+        self.orientation = 0
+        self.status = 'ok'
+        self.heading = 0
+        self.range = 0
+
 class RobotMessage(object):
     """
     Convenience class for receiving and cracking messages from

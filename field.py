@@ -17,47 +17,19 @@ def update_all_results (lidar_viewer, field_model, robot, factor):
     # do some analysis and gather up the results so they can be plotted
     # run a 4-point r-squared and collect those less than threshold value
     cart_data = rotation.cartesian_data()
-    r2_markers = []
-    building_vector_start = None
-    building_vector_end = None
-    max_mag = 0
-    for i in range(0, len(cart_data)-factor):
-        slice = cart_data[i:i+factor]
-        r2 = r_squared(slice)
-        # start or continue
-        if r2 > .7:
-            if building_vector_start is not None:
-                building_vector_end = slice[0]
-            else:
-                building_vector_start = slice[0]
-                building_vector_end = slice[0]
-        # continue
-        if r2 > .5:
-            if building_vector_start is not None:
-                building_vector_end = slice[0]
-        # found end of a vector.    Display it.
-        if building_vector_start is not None and r2 <= 0.5:
-            x1, y1 = building_vector_start
-            x2, y2 = building_vector_end
-            new_mag = math.sqrt((x2-x1)**2+(y2-y1)**2)
-            print("mag {:.1f} vector going from ({:.1f},{:.1f}) to ({:.1f},{:.1f})\n".format(new_mag, x1, y1, x2, y2))
-            if new_mag > max_mag:
-                max_mag = new_mag
-                max_start = building_vector_start
-                max_end = building_vector_end
-            building_vector_start = None
-            building_vector_end = None
-        
-        if r2 < 0.8:
-            x,y = cart_data[i+factor]
-            print("r2 = {:.2f} at {:.2f},{:2f}\n".format(r2,x,y))
-            r2_markers.append((x,y))
+
+    # try out the analyzer find_wall
+    (heading, distance, orientation) = find_wall_midpoint(cart_data)
+    print("Analyzer.find_wall() heading {:.1f}, range {:.1f}, orientation {:.1f})".format(heading, distance, orientation))
 
     #  plot the polar data for reference
     lidar_viewer.plot_polar(rotation.polar_data())
 
     #  plot the rectangular data
     lidar_viewer.plot_cartesian(cart_data)
+
+    #  polar markers (heading in degrees)
+    find_wall_markers = [ (-heading, distance) ]
 
     #
     # display the average distance of data points
@@ -67,10 +39,12 @@ def update_all_results (lidar_viewer, field_model, robot, factor):
     print("Average distance: {:.1f}\n".format(avg_dist))
 
     # plot any calculated markers in their specified color
-    lidar_viewer.plot_markers(r2_markers, 'g')
+    #lidar_viewer.plot_markers(r2_markers, 'g')
 
-    wall_markers = [max_start, max_end]
-    lidar_viewer.plot_markers(wall_markers, 'b')
+    lidar_viewer.plot_polar_markers(find_wall_markers, 'r')
+
+    #wall_markers = [max_start, max_end]
+    #lidar_viewer.plot_markers(wall_markers, 'b')
 
 
 if __name__ == '__main__':
