@@ -24,7 +24,7 @@ import socket
 from udp_channels import *
 from sensor_message import *
 from analyzer import Analyzer, find_wall_midpoint
-#from lidar_viewer import LidarLogger
+from lidar_logger import LidarLogger
 from laser import Laser, Reading, Packet, Rotation
 
 import logging
@@ -51,8 +51,10 @@ if __name__ == '__main__':
         file_index = 1
         rotation_time = 0
         current_time = 0
-        seconds_per_output = 5
+        seconds_per_output = 1
         SECONDS_PER_MINUTE = 60.0
+        
+        calibrated_zero = 6
         lp = None
         lasr = None
 
@@ -60,13 +62,21 @@ if __name__ == '__main__':
                 serial_port_name = sys.argv[1]
         else:
                 logger.critical('Missing script argument identifying serial port to lidar unit.')
-                logger.critical('Usage: python neeto_lidar.py </dev/tty name for serial port>')
+                logger.critical('Usage: python neeto_lidar.py </dev/tty name for serial port> <calibrated zero>')
                 logger.critical('I will assume the device name is /dev/ttyUSB0')
+                logger.critical('I will assume the calibrated zero is {:d} degrees'.format(calibrated_zero))
+                logger.critical('I will assume the start logging file index is 1.')
                 logger.critical('maybe /dev/tty.wchusbserial1420, or maybe /dev/tty.usbserial')
                 periodic_message.status = 'badarg'
                 periodic_message.rpm = 0
                 channel.send_to(periodic_message.encode_message())
                 serial_port_name = '/dev/ttyUSB0'
+        
+        if len(sys.argv) > 2:
+                calibrated_zero = sys.argv[2]
+
+        if len(sys.argv) > 3:
+                file_index = sys.argv[3]
         
 	while 1: 
                 if lp is None:
@@ -107,20 +117,23 @@ if __name__ == '__main__':
                                 periodic_message.status = 'ok'
                                 periodic_message.rpm = rotation.rpm()
                                 channel.send_to(periodic_message.encode_message())
+                                logger.info("reported rpm is {:d}".format(rotation.rpm()))
 
                                 #
-                                # send out the wall heading and distance report
+                                # send out the wall heading and distance report  (disabled)
                                 #
-                                (wall_heading, wall_distance, wall_orientation) = find_wall_midpoint(rotation.cartesian_data())
-                                logger.info("find_wall_midpoint => heading {:.1f}, range {:.1f}, orientation {:.1f})".format(wall_heading, wall_distance, wall_orientation))
-                                if (wall_heading, wall_distance, wall_orientation) == (0, 0, 0):
-                                        wall_message.status = 'error'
-                                else:
-                                        wall_message.status = 'ok'
-                                        wall_message.range = wall_distance
-                                        wall_message.heading = wall_heading
-                                        wall_message.orientation = wall_orientation
-                                channel.send_to(wall_message.encode_message())
+                                if 0:
+                                        (wall_heading, wall_distance, wall_orientation) = find_wall_midpoint(rotation.cartesian_data())
+                                        logger.info("find_wall_midpoint => heading {:.1f}, range {:.1f}, orientation {:.1f})".format(wall_heading, wall_distance, wall_orientation))
+                                        if (wall_heading, wall_distance, wall_orientation) == (0, 0, 0):
+                                                wall_message.status = 'error'
+                                        else:
+                                                wall_message.status = 'ok'
+                                                wall_message.range = wall_distance
+                                                wall_message.heading = wall_heading
+                                                wall_message.orientation = wall_orientation
+                                                channel.send_to(wall_message.encode_message())
+                                
                                 
  		        except IOError,e:
                                 #  log and notify robot of error
@@ -128,23 +141,25 @@ if __name__ == '__main__':
                                 channel.send_to(periodic_message.encode_message())
                                 logger.error("Failed to gather a full rotation of data.")
 
-                                #
-                                # get revised instructions from robot
-                                #
-                                try:
-                                        robot_data, robot_address = channel.receive_from()
-                                        message_from_robot = RobotMessage(robot_data)
-                                        if ((message_from_robot.sender == 'robot') and
-                                            (message_from_robot.message == 'sweep')):
-                                                Analyzer.start = message_from_robot.start
-                                                Analyzer.stop = message_from_robot.stop
-                                except socket.timeout:
-                                        logger.info("No message received from robot")
+                        #
+                        # get revised instructions from robot
+                        #
+                        if 0:
+                                robot_data, robot_address = channel.receive_from()
+                                message_from_robot = RobotMessage(robot_data)
+                                if ((message_from_robot.sender == 'robot') and
+                                    (message_from_robot.message == 'sweep')):
+                                        Analyzer.start = message_from_robot.start
+                                        Analyzer.stop = message_from_robot.stop
+                        #except socket.timeout:
+                        #        logger.info("No message received from robot")
 
-                                        elapsed_time = (SECONDS_PER_MINUTE/float(rotation.rpm()))
-                                        rotation_time = rotation_time + elapsed_time
-                                        current_time = current_time + elapsed_time
-                                        if rotation_time > seconds_per_output:
-                                                #lidar_logger.log_data(rotation.polar_data())
-                                                file_index = file_index + 1
-                                                rotation_time = 0
+                        elapsed_time = (SECONDS_PER_MINUTE/float(rotation.rpm()))
+                        rotation_time = rotation_time + elapsed_time
+                        logger.info("rotation time is: {:.1f}".format(rotation_time))
+                        current_time = current_time + elapsed_time
+                        if rotation_time > seconds_per_output:
+                                fname = "data/lidar_snapshot_{:d}.dat".format(file_index)
+                                LidarLogger.write_to_file(fname, rotation.polar_data())
+                                file_index = file_index + 1
+                                rotation_time = 0

@@ -221,7 +221,7 @@ class Laser (object):
 	mapnames = []
 	cmdmode = 0
 
-	def __init__(self,sd):
+	def __init__(self,sd,calibration_compensation=6):
                 """setup internal variables and associate the laser with open serial port"""
 		self.results=0
 		self.haslaser=0

@@ -1,5 +1,5 @@
 import math
-import statistics as stats
+#import statistics as stats
 
 class Analyzer:
     """
@@ -132,18 +132,18 @@ def find_wall_midpoint (array):
         return 0,0,0
 
 
-def avg_distance (cart_data):
-    distances = map(lambda(x,y): math.sqrt(x**2+y**2), cart_data)
-    return stats.mean(distances)
+#def avg_distance (cart_data):
+#    distances = map(lambda(x,y): math.sqrt(x**2+y**2), cart_data)
+#    return stats.mean(distances)
 
-def aggregate_distance (ranges_at_a_heading):
-    """
-    Aggregate the values of the reported ranges at the distance.
-    Takes a list of grouped-by range reports for the same heading
-    and combines them into a single value.
-    """
-    ranges = [r for _,r in ranges_at_a_heading]
-    return stats.mean(ranges)
+#def aggregate_distance (ranges_at_a_heading):
+#    """
+#    Aggregate the values of the reported ranges at the distance.
+#    Takes a list of grouped-by range reports for the same heading
+#    and combines them into a single value.
+#    """
+#    ranges = [r for _,r in ranges_at_a_heading]
+#    return stats.mean(ranges)
     
     # double numerator = 4*(pair1->x*pair1->y + pair2->x*pair2->y + pair3->x*pair3->y + pair4->x*pair4->y)
 #     - ( (pair1->x + pair2->x + pair3->x + pair4->x) * (pair1->y + pair2->y + pair3->y + pair4->y) );
