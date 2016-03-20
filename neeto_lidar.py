@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 #
 if __name__ == '__main__':
 
-        robot_name = 'roborio-10760-frc.local'
+        robot_name = '10.10.76.2'
         
         channel = UDPChannel(remote_ip=robot_name, remote_port=5880,
                               local_ip='0.0.0.0', local_port=52954)
@@ -69,14 +69,20 @@ if __name__ == '__main__':
                 logger.critical('maybe /dev/tty.wchusbserial1420, or maybe /dev/tty.usbserial')
                 periodic_message.status = 'badarg'
                 periodic_message.rpm = 0
-                channel.send_to(periodic_message.encode_message())
+                if not suppress_robot_comm:
+                        channel.send_to(periodic_message.encode_message())
                 serial_port_name = '/dev/ttyUSB0'
         
         if len(sys.argv) > 2:
                 calibrated_zero = sys.argv[2]
 
         if len(sys.argv) > 3:
-                file_index = sys.argv[3]
+                file_index = int(sys.argv[3])
+
+        if len(sys.argv) > 4:
+                suppress_robot_comm = True
+        else:
+                suppress_robot_comm = False
         
 	while 1: 
                 if lp is None:
@@ -92,7 +98,8 @@ if __name__ == '__main__':
                                 logger.critical('Try /dev/ttyUSB0, or maybe /dev/tty.wchusbserial1420, or maybe /dev/tty.usbserial')
                                 periodic_message.status = 'down'
                                 periodic_message.rpm = 0
-                                channel.send_to(periodic_message.encode_message())
+                                if not suppress_robot_comm:
+                                        channel.send_to(periodic_message.encode_message())
                                 logger.error('Lidar port could not be opened.')
 
                 if lasr is not None:
@@ -111,12 +118,14 @@ if __name__ == '__main__':
                                 # push the newly calculated data into the message
                                 range_at_heading_message.heading = tgt_heading
                                 range_at_heading_message.range = tgt_range
-                                channel.send_to(range_at_heading_message.encode_message())
+                                if not suppress_robot_comm:
+                                        channel.send_to(range_at_heading_message.encode_message())
                                 
                                 # push periodic message to the bot
                                 periodic_message.status = 'ok'
                                 periodic_message.rpm = rotation.rpm()
-                                channel.send_to(periodic_message.encode_message())
+                                if not suppress_robot_comm:
+                                        channel.send_to(periodic_message.encode_message())
                                 logger.info("reported rpm is {:d}".format(rotation.rpm()))
 
                                 #
@@ -132,13 +141,15 @@ if __name__ == '__main__':
                                                 wall_message.range = wall_distance
                                                 wall_message.heading = wall_heading
                                                 wall_message.orientation = wall_orientation
-                                                channel.send_to(wall_message.encode_message())
+                                                if not suppress_robot_comm:
+                                                        channel.send_to(wall_message.encode_message())
                                 
                                 
  		        except IOError,e:
                                 #  log and notify robot of error
                                 periodic_message.status = 'error'
-                                channel.send_to(periodic_message.encode_message())
+                                if not suppress_robot_comm:
+                                        channel.send_to(periodic_message.encode_message())
                                 logger.error("Failed to gather a full rotation of data.")
 
                         #

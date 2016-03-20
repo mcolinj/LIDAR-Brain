@@ -1,13 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-import pylab
 import pdb
 import sys
 
 def plot_file(fname):
     """slurp lidar data from a txt file and plot it with pyplot"""
-    pdb.set_trace()
     data = np.loadtxt(fname, delimiter=",")
 
     # toss out the error data
@@ -24,7 +22,7 @@ def plot_file(fname):
     ax.grid(True)
     ax.cla()
     ax.plot(theta, radius, 'x', color='r', linewidth=3)
-    pylab.show()
+    plt.show()
 
 for arg in sys.argv[1:]:
     plot_file(arg)
